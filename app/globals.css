@@ -1,26 +1,1209 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* ============================================================
+   Gate design tokens — see DESIGN.md
+   Direction: Yé-Yé Pop Sleeve. Colour strategy is Drenched:
+   a saturated field owns each screen, content objects sit on it.
+   ============================================================ */
+@theme {
+  /* Palette. Exposed as --color-* so `bg-turquoise`, `text-brown`,
+     `border-beige` etc. are available as utilities for layout work. */
+  --color-tangerine: #ae2f00; /* text-bearing ground — carries white at 6.6:1 */
+  --color-tangerine-bright: #ff5a00; /* tiles, accents, art — NEVER behind body copy */
+  --color-tangerine-deep: #8f2600;
+  --color-turquoise: #00c7c3;
+  --color-turquoise-deep: #00a6a3;
+  --color-beige: #f6d6b3;
+  --color-brown: #3a1f16;
+  --color-brown-soft: #5a392c;
+  --color-cream: #fff8ee;
+  --color-paper: #fff0df; /* lead copy on the tangerine ground */
+
+  --radius-pill: 999px;
+  --radius-sleeve: 22px;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-baloo);
+  --font-body: var(--font-hanken);
+  --font-sans: var(--font-hanken);
+  --font-mono: ui-monospace, "SFMono-Regular", Menlo, monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+:root {
+  --shell: 1360px;
+
+  /* Per-section ground/ink pair. Each <section class="side"> overrides these
+     inline; the landing sets tangerine/white. */
+  --ground: var(--color-tangerine);
+  --ink: var(--color-white, #fff);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  margin: 0;
+  background: var(--color-tangerine);
+  color: #fff;
+  font-family: var(--font-body);
+  font-size: 17px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* ---- material: two fixed overlays give every ground its print character ---- */
+
+/* halftone print grain */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  pointer-events: none;
+  opacity: 0.5;
+  mix-blend-mode: multiply;
+  background-image: radial-gradient(rgba(0, 0, 0, 0.55) 0.6px, transparent 0.7px);
+  background-size: 3px 3px;
+}
+
+/* matte paper tooth */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 9997;
+  pointer-events: none;
+  opacity: 0.11;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='p'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='4'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23p)'/%3E%3C/svg%3E");
+}
+
+h1,
+h2,
+h3,
+h4 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 800;
+  line-height: 0.92;
+  letter-spacing: -0.02em;
+}
+
+p {
+  margin: 0;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+}
+
+/* ---- browser surfaces themed from the palette ---- */
+::selection {
+  background: var(--color-turquoise);
+  color: var(--color-brown);
+}
+
+::-webkit-scrollbar {
+  width: 13px;
+  height: 13px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-tangerine-deep);
+}
+
+::-webkit-scrollbar-thumb {
+  background: #fff;
+  border-radius: var(--radius-pill);
+  border: 3px solid var(--color-tangerine-deep);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-beige);
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-turquoise);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+.shell {
+  max-width: var(--shell);
+  margin: 0 auto;
+  padding: 0 44px;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ============ SECTION AS SLEEVE ============ */
+.side {
+  position: relative;
+  background: var(--ground);
+  color: var(--ink);
+  transition: background-color 0.55s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* The world's signature motion: the ground cross-fades between releases.
+   Pure CSS — no client JS anywhere on this page.
+
+   CONSTRAINT: these six grounds are bound by nth-child index, and duplicate
+   the `field` values in lib/palette.ts. CSS cannot read a descendant's custom
+   property from an ancestor, so the duplication is unavoidable — keep the
+   order of RACK_PALETTE in lockstep with these rules. The indices also assume
+   NOTHING precedes the .rk cards inside .rack-grid. */
+#s1:has(.rk:nth-child(1):hover) {
+  background-color: #0a6e6b;
+}
+#s1:has(.rk:nth-child(2):hover) {
+  background-color: #6e5230;
+}
+#s1:has(.rk:nth-child(3):hover) {
+  background-color: #b8291b;
+}
+#s1:has(.rk:nth-child(4):hover) {
+  background-color: #7a5400;
+}
+#s1:has(.rk:nth-child(5):hover) {
+  background-color: #2a1610;
+}
+#s1:has(.rk:nth-child(6):hover) {
+  background-color: #73310f;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .side {
+    transition: none;
+  }
+}
+
+.side-mark {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 44px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink);
+  opacity: 0.72;
+  pointer-events: none;
+}
+
+.side-mark::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: currentColor;
+  opacity: 0.34;
+}
+
+.side-mark b {
+  font-weight: 800;
+  opacity: 0.9;
+}
+
+/* ============ PILLS ============ */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 15px 30px;
+  border-radius: var(--radius-pill);
+  border: 2px solid var(--ink);
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  transition:
+    transform 0.2s cubic-bezier(0.2, 0.8, 0.3, 1),
+    background 0.2s,
+    color 0.2s;
+}
+
+.pill:hover {
+  transform: translateY(-2px);
+}
+
+.pill-solid {
+  background: var(--ink);
+  color: var(--ground);
+}
+
+.pill-solid:hover {
+  background: var(--color-beige);
+  border-color: var(--color-beige);
+  color: var(--color-brown);
+}
+
+.pill-ghost:hover {
+  background: var(--ink);
+  color: var(--ground);
+}
+
+.pill-sm {
+  padding: 10px 19px;
+  font-size: 12px;
+}
+
+.pill-turq {
+  background: var(--color-turquoise);
+  border-color: var(--color-turquoise);
+  color: var(--color-brown);
+}
+
+.pill-turq:hover {
+  background: #fff;
+  border-color: #fff;
+}
+
+.pill[disabled] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.pill[disabled]:hover {
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pill,
+  .pill:hover {
+    transition: none;
+    transform: none;
+  }
+}
+
+/* ============ NAV ============ */
+.nav {
+  position: relative;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 34px;
+  padding: 38px 44px 0;
+  max-width: var(--shell);
+  margin: 0 auto;
+}
+
+.logo {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 34px;
+  letter-spacing: -0.045em;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.logo i {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--color-turquoise);
+  display: inline-block;
+  flex: none;
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.28);
+}
+
+.nav-mid {
+  display: flex;
+  gap: 7px;
+  margin-left: 14px;
+}
+
+.nav-mid a {
+  padding: 9px 17px;
+  border-radius: var(--radius-pill);
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  transition:
+    background 0.18s,
+    color 0.18s;
+}
+
+.nav-mid a:hover {
+  background: rgba(255, 255, 255, 0.19);
+}
+
+.nav-mid a.on {
+  background: #fff;
+  color: var(--color-tangerine);
+}
+
+.nav-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ============ HERO ============ */
+.hero {
+  position: relative;
+  overflow: hidden;
+  padding-bottom: 34px;
+}
+
+.hero-in {
+  display: grid;
+  grid-template-columns: 1.02fr 0.98fr;
+  gap: 56px;
+  align-items: center;
+  padding-top: 60px;
+  padding-bottom: 56px;
+}
+
+.hero-title {
+  font-size: clamp(60px, 7.6vw, 116px);
+  margin-bottom: 24px;
+}
+
+.hero-title em {
+  font-style: normal;
+  color: var(--color-beige);
+}
+
+.hero-lead {
+  font-size: 19.5px;
+  line-height: 1.6;
+  max-width: 34ch;
+  color: var(--color-paper);
+  font-weight: 500;
+  margin-bottom: 32px;
+}
+
+.hero-acts {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 44px;
+}
+
+/* the rack strip — how many sleeves are out */
+.rack-strip {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.rack-chips {
+  display: flex;
+}
+
+.rack-chips i {
+  width: 34px;
+  height: 44px;
+  border-radius: 5px;
+  display: block;
+  margin-right: -11px;
+  border: 2px solid rgba(58, 31, 22, 0.5);
+  box-shadow: 2px 0 0 rgba(0, 0, 0, 0.09);
+}
+
+.rack-strip span {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--color-paper);
+  letter-spacing: 0.03em;
+}
+
+/* ============ THE SLEEVE OBJECT ============ */
+.sleeve-stage {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  perspective: 1400px;
+}
+
+.sleeve {
+  position: relative;
+  width: min(430px, 100%);
+  transform: rotate(-2.4deg);
+  transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+.sleeve:hover {
+  transform: rotate(0deg) translateY(-7px);
+}
+
+.sleeve-art {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: var(--radius-sleeve);
+  overflow: hidden;
+  background: var(--color-brown);
+  box-shadow: 0 30px 60px -18px rgba(58, 31, 22, 0.6);
+}
+
+.sleeve-art svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* the vinyl edge peeking out from behind the sleeve */
+.vinyl {
+  position: absolute;
+  right: -58px;
+  top: 44%;
+  transform: translateY(-50%);
+  width: 248px;
+  height: 248px;
+  border-radius: 50%;
+  z-index: -1;
+  background: repeating-radial-gradient(circle at 50% 50%, #2a1610 0 2px, #3a1f16 2px 4px);
+  box-shadow:
+    0 18px 40px -10px rgba(0, 0, 0, 0.6),
+    0 0 0 2px rgba(58, 31, 22, 0.5);
+  transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+.sleeve:hover .vinyl {
+  transform: translateY(-50%) translateX(40px) rotate(22deg);
+}
+
+.vinyl::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 62px;
+  height: 62px;
+  border-radius: 50%;
+  background: var(--color-turquoise);
+}
+
+.vinyl::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--color-brown);
+  z-index: 2;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sleeve,
+  .sleeve:hover,
+  .vinyl,
+  .sleeve:hover .vinyl {
+    transition: none;
+  }
+}
+
+/* numbered tier listing — the sleeve's track list */
+.listing {
+  margin-top: 18px;
+  background: rgba(58, 31, 22, 0.26);
+  border-radius: 16px;
+  padding: 15px 18px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.listing-h {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: #fff;
+  padding-bottom: 9px;
+  border-bottom: 2px solid rgba(246, 214, 179, 0.5);
+}
+
+.trk {
+  display: grid;
+  grid-template-columns: 26px 1fr auto;
+  gap: 12px;
+  align-items: baseline;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(246, 214, 179, 0.22);
+  font-size: 15px;
+  transition:
+    transform 0.2s cubic-bezier(0.2, 0.8, 0.3, 1),
+    color 0.2s;
+}
+
+.trk:hover {
+  transform: translateX(7px);
+}
+
+.trk b {
+  font-weight: 800;
+  font-size: 12.5px;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.trk span {
+  font-weight: 600;
+}
+
+.trk i {
+  font-style: normal;
+  font-weight: 800;
+  font-size: 15px;
+  color: #fff;
+}
+
+.trk i::before {
+  content: "EGP ";
+  font-size: 10.5px;
+  font-weight: 700;
+  opacity: 0.6;
+}
+
+.trk.out {
+  color: rgba(255, 255, 255, 0.66);
+}
+
+.trk.out i::before {
+  content: "";
+}
+
+.trk.out span {
+  text-decoration: line-through;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .trk,
+  .trk:hover {
+    transition: none;
+    transform: none;
+  }
+}
+
+/* ============ MARQUEE ============ */
+.mq {
+  overflow: hidden;
+  background: var(--color-turquoise);
+  color: var(--color-brown);
+  padding: 13px 0;
+  border-top: 3px solid var(--color-brown);
+  border-bottom: 3px solid var(--color-brown);
+}
+
+.mq-t {
+  display: flex;
+  gap: 30px;
+  align-items: center;
+  white-space: nowrap;
+  width: max-content;
+  animation: mq 30s linear infinite;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 23px;
+  letter-spacing: -0.01em;
+}
+
+.mq-t i {
+  font-style: normal;
+  font-size: 15px;
+}
+
+@keyframes mq {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mq-t {
+    animation: none;
+  }
+}
+
+/* ============ THE RACK ============ */
+.rack {
+  padding: 76px 0 88px;
+}
+
+.rack-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 40px;
+  flex-wrap: wrap;
+  margin-bottom: 38px;
+}
+
+.rack-head h2 {
+  font-size: clamp(40px, 4.6vw, 66px);
+}
+
+.rack-filters {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+/* sleeves in a rack: each carries its own ground via inline --rk/--rkink */
+.rack-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 26px;
+}
+
+.rk {
+  border-radius: var(--radius-sleeve);
+  overflow: hidden;
+  background: var(--rk);
+  color: var(--rkink);
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 16px 34px -14px rgba(58, 31, 22, 0.5);
+  transition:
+    transform 0.28s cubic-bezier(0.2, 0.8, 0.3, 1),
+    box-shadow 0.28s;
+}
+
+.rk:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 26px 48px -14px rgba(58, 31, 22, 0.6);
+}
+
+.rk-art {
+  aspect-ratio: 1.12;
+  position: relative;
+  overflow: hidden;
+}
+
+.rk-art svg,
+.rk-art img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.rk-date {
+  position: absolute;
+  left: 14px;
+  top: 14px;
+  border-radius: var(--radius-pill);
+  background: var(--rkink);
+  color: var(--rk);
+  padding: 7px 15px;
+  font-size: 12.5px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+.rk-left {
+  position: absolute;
+  right: 14px;
+  top: 14px;
+  border-radius: var(--radius-pill);
+  background: rgba(58, 31, 22, 0.62);
+  color: #fff;
+  backdrop-filter: blur(5px);
+  padding: 7px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.rk-left.hot {
+  background: var(--color-turquoise);
+  color: var(--color-brown);
+}
+
+.rk-body {
+  padding: 19px 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  flex: 1;
+}
+
+.rk-body h3 {
+  font-size: 27px;
+  letter-spacing: -0.03em;
+  line-height: 0.98;
+}
+
+.rk-venue {
+  font-size: 13.5px;
+  font-weight: 600;
+  opacity: 0.72;
+}
+
+.rk-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: auto;
+  padding-top: 16px;
+}
+
+.rk-price b {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 23px;
+  letter-spacing: -0.02em;
+}
+
+.rk-price span {
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.66;
+  display: block;
+  margin-top: -2px;
+}
+
+.rk-go {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  flex: none;
+  border: 2px solid currentColor;
+  display: grid;
+  place-items: center;
+  transition:
+    background 0.2s,
+    color 0.2s,
+    transform 0.2s;
+}
+
+.rk-go svg {
+  width: 17px;
+  height: 17px;
+  display: block;
+}
+
+.rk:hover .rk-go {
+  background: var(--rkink);
+  color: var(--rk);
+  transform: rotate(-45deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rk,
+  .rk:hover,
+  .rk-go,
+  .rk:hover .rk-go {
+    transition: none;
+    transform: none;
+  }
+}
+
+.rack-foot {
+  display: flex;
+  justify-content: center;
+  margin-top: 38px;
+}
+
+/* ============ SIDE B — THE DOOR (organizer sign-in) ============
+   The brown ground, used as a field for the first time. One turquoise stub
+   sits on it; the form lives on the stub's wide half. */
+.gate-door {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  padding: 96px 0 72px;
+}
+
+/* the field's own artwork: two soft lamps, no image payload */
+.gate-door::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(760px 460px at 12% 8%, rgba(255, 90, 0, 0.34), transparent 68%),
+    radial-gradient(620px 420px at 92% 96%, rgba(0, 199, 195, 0.2), transparent 66%);
+}
+
+.gate-door-in {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1.04fr 0.96fr;
+  gap: 68px;
+  align-items: center;
+}
+
+.gate-logo {
+  margin-bottom: 42px;
+  color: var(--color-beige);
+}
+
+.gate-title {
+  font-size: clamp(52px, 6.2vw, 92px);
+  margin-bottom: 22px;
+}
+
+.gate-title em {
+  font-style: normal;
+  color: var(--color-turquoise);
+}
+
+.gate-lead {
+  font-size: 18.5px;
+  line-height: 1.6;
+  max-width: 33ch;
+  color: var(--color-beige);
+  font-weight: 500;
+  margin-bottom: 34px;
+}
+
+/* the three-step listing, cut from the sleeve's track list */
+.gate-list {
+  list-style: none;
+  margin: 0 0 34px;
+  padding: 0;
+  max-width: 330px;
+  border-top: 2px solid rgba(246, 214, 179, 0.34);
+}
+
+.gate-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding: 11px 0;
+  border-bottom: 1px solid rgba(246, 214, 179, 0.2);
+  transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+.gate-list li:hover {
+  transform: translateX(7px);
+}
+
+.gate-list b {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  color: var(--color-turquoise);
+}
+
+.gate-list span {
+  font-size: 15.5px;
+  font-weight: 600;
+  color: var(--color-beige);
+}
+
+.gate-note {
+  font-size: 14px;
+  color: rgba(246, 214, 179, 0.74);
+}
+
+.gate-link {
+  font-weight: 700;
+  color: var(--color-turquoise);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.gate-link:hover {
+  color: #fff;
+}
+
+/* ---- the stub ---- */
+.stub-stage {
+  display: flex;
+  justify-content: center;
+}
+
+.stub {
+  position: relative;
+  width: min(430px, 100%);
+  background: var(--color-cream);
+  color: var(--color-brown);
+  border-radius: var(--radius-sleeve);
+  padding: 30px 32px 0;
+  transform: rotate(1.4deg);
+  box-shadow: 0 34px 66px -20px rgba(0, 0, 0, 0.6);
+  transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+.stub:hover,
+.stub:focus-within {
+  transform: rotate(0deg) translateY(-6px);
+}
+
+.stub-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding-bottom: 13px;
+  margin-bottom: 24px;
+  border-bottom: 2px solid rgba(58, 31, 22, 0.22);
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.stub-head b {
+  color: var(--color-tangerine);
+}
+
+.stub-foot {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-brown-soft);
+  padding-bottom: 26px;
+}
+
+/* the perforation, and the counterfoil below it */
+.stub-tear {
+  position: relative;
+  margin: 0 -32px;
+  padding: 16px 32px 20px;
+  border-top: 2px dashed rgba(58, 31, 22, 0.3);
+  text-align: center;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.3em;
+  color: rgba(58, 31, 22, 0.5);
+}
+
+/* the two notches the tear is punched between */
+.stub-tear::before,
+.stub-tear::after {
+  content: "";
+  position: absolute;
+  top: -14px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--ground);
+}
+
+.stub-tear::before {
+  left: -14px;
+}
+
+.stub-tear::after {
+  right: -14px;
+}
+
+/* ---- form ---- */
+.gate-form {
+  display: flex;
+  flex-direction: column;
+  gap: 17px;
+  margin-bottom: 22px;
+}
+
+.fld {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.fld > span {
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-brown-soft);
+}
+
+.fld input {
+  font: inherit;
+  font-size: 16px; /* ≥16px so iOS Safari doesn't zoom on focus */
+  font-weight: 600;
+  width: 100%;
+  padding: 13px 16px;
+  color: var(--color-brown);
+  background: #fff;
+  border: 2px solid rgba(58, 31, 22, 0.28);
+  border-radius: 12px;
+  transition:
+    border-color 0.18s,
+    box-shadow 0.18s;
+}
+
+.fld input::placeholder {
+  color: rgba(58, 31, 22, 0.36);
+  font-weight: 500;
+}
+
+.fld input:hover {
+  border-color: rgba(58, 31, 22, 0.5);
+}
+
+.fld input:focus {
+  outline: none;
+  border-color: var(--color-turquoise-deep);
+  box-shadow: 0 0 0 4px rgba(0, 199, 195, 0.28);
+}
+
+.fld input:disabled {
+  opacity: 0.6;
+}
+
+.gate-form-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.chk {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--color-brown-soft);
+  cursor: pointer;
+}
+
+.chk input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--color-turquoise-deep);
+  cursor: pointer;
+}
+
+.gate-submit {
+  width: 100%;
+  margin-top: 3px;
+}
+
+/* `.pill-turq` hovers to white, which all but vanishes against the cream stub.
+   Darken within the accent instead, so the button reads as a press and keeps
+   its edge against the card. Scoped here — the shared pill is left alone. */
+.gate-submit:hover:not([disabled]),
+.gate-submit:focus-visible {
+  background: var(--color-turquoise-deep);
+  border-color: var(--color-turquoise-deep);
+  color: var(--color-brown);
+}
+
+/* Errors read on the cream stub, so tangerine-deep — not the bright. */
+.gate-error {
+  display: flex;
+  gap: 9px;
+  padding: 12px 15px;
+  border-radius: 12px;
+  background: rgba(174, 47, 0, 0.1);
+  border-left: 4px solid var(--color-tangerine);
+  color: var(--color-tangerine-deep);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stub,
+  .stub:hover,
+  .stub:focus-within,
+  .gate-list li,
+  .gate-list li:hover {
+    transition: none;
+    transform: none;
+  }
+}
+
+/* ============ RESPONSIVE ============
+   The artifact's own breakpoints — this is what the design was composed
+   against. Don't re-derive these from Tailwind's scale. */
+@media (max-width: 1080px) {
+  .hero-in {
+    grid-template-columns: 1fr;
+    gap: 48px;
+  }
+
+  .rack-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .vinyl {
+    display: none;
+  }
+
+  .gate-door-in {
+    grid-template-columns: 1fr;
+    gap: 48px;
+    max-width: 520px;
+  }
+
+  .gate-door {
+    padding-top: 84px;
+  }
+
+  .gate-list {
+    max-width: none;
+  }
+}
+
+@media (max-width: 680px) {
+  .shell,
+  .nav,
+  .side-mark {
+    padding-left: 22px;
+    padding-right: 22px;
+  }
+
+  .rack-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .nav-mid {
+    display: none;
+  }
+
+  .hero-title {
+    font-size: clamp(46px, 12vw, 62px);
+  }
+
+  .gate-title {
+    font-size: clamp(42px, 11vw, 58px);
+  }
+
+  .stub {
+    padding-left: 22px;
+    padding-right: 22px;
+    transform: rotate(0deg);
+  }
+
+  .stub-tear {
+    margin-left: -22px;
+    margin-right: -22px;
+    padding-left: 22px;
+    padding-right: 22px;
+  }
 }

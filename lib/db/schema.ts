@@ -106,7 +106,7 @@ export const events = pgTable(
     posterUrl: text("poster_url"),
     startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
     endsAt: timestamp("ends_at", { withTimezone: true }),
-    status: text("status", { enum: ["draft", "published", "cancelled"] })
+    status: text("status", { enum: ["draft", "active", "cancelled", "archived","sold_out"] })
       .default("draft")
       .notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
