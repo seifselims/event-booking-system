@@ -1,11 +1,11 @@
 import { randomUUID } from 'node:crypto';
 
 import { TRPCError } from '@trpc/server';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNull, lt, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { db } from '@/lib/db';
-import { events } from '@/lib/db/schema';
+import { events, orders, ticketTypes, tickets } from '@/lib/db/schema';
 
 import { createTRPCRouter, protectedProcedure, baseProcedure} from '../init';
 
@@ -24,6 +24,19 @@ function ownsEvent(eventId: string, organizerId: string, isAdmin: boolean) {
  * happening, there is just nothing left to buy.
  */
 const PUBLIC_STATUSES = ['active', 'sold_out'] as const;
+
+/**
+ * Events are shown in the venue's local time (`lib/format.ts`), so "tonight"
+ * is the rest of the current *Cairo* day, not the server's or the viewer's.
+ *
+ * The bounds are computed by Postgres rather than in JS: `AT TIME ZONE` gives
+ * the same answer regardless of the container's zone, and midnight lands on the
+ * right instant across DST without a date library.
+ */
+const TONIGHT_ZONE = 'Africa/Cairo';
+
+/** Start of the next Cairo day, as a `timestamptz`. */
+const CAIRO_DAY_END = sql`((date_trunc('day', now() AT TIME ZONE ${TONIGHT_ZONE}) + interval '1 day') AT TIME ZONE ${TONIGHT_ZONE})`;
 
 /** Lowercase, hyphenated, punctuation stripped — `slug` is globally unique. */
 function slugify(title: string) {
@@ -52,6 +65,27 @@ export const eventsRouter = createTRPCRouter({
     db.query.events.findMany({
       orderBy: desc(events.createdAt),
       where: inArray(events.status, PUBLIC_STATUSES),
+      with: {
+        ticketTypes: true,
+      },
+    }),
+  ),
+
+  /**
+   * The nav's "Tonight" — publicly visible events starting between now and
+   * midnight in Cairo, soonest first.
+   *
+   * Doors that have already opened are dropped: `startsAt >= now()` keeps the
+   * list to things you can still turn up for.
+   */
+  listTonight: baseProcedure.query(() =>
+    db.query.events.findMany({
+      orderBy: asc(events.startsAt),
+      where: and(
+        inArray(events.status, PUBLIC_STATUSES),
+        gte(events.startsAt, sql`now()`),
+        lt(events.startsAt, CAIRO_DAY_END),
+      ),
       with: {
         ticketTypes: true,
       },
@@ -152,6 +186,138 @@ export const eventsRouter = createTRPCRouter({
         orderBy: desc(events.createdAt),
       }),
     ),
+
+    /**
+     * The dashboard's events table: each event with its capacity, tickets sold,
+     * and revenue to date. Same scoping rule as `getMyEvents` — admins see every
+     * organizer's events.
+     *
+     * Capacity and revenue are aggregated in separate subqueries on purpose:
+     * joining ticket_types and orders in one pass multiplies their rows against
+     * each other, which would inflate both sums.
+     */
+    getMyEventsWithStats: protectedProcedure.query(({ ctx }) => {
+      const isAdmin = ctx.user.role === 'admin';
+
+      const capacity = db
+        .select({
+          eventId: ticketTypes.eventId,
+          capacity: sql<number>`COALESCE(SUM(${ticketTypes.quantity}), 0)::int`.as(
+            'capacity',
+          ),
+          minPrice: sql<number | null>`MIN(${ticketTypes.pricePiastres})::int`.as(
+            'min_price',
+          ),
+          tiers: sql<number>`COUNT(*)::int`.as('tiers'),
+        })
+        .from(ticketTypes)
+        .groupBy(ticketTypes.eventId)
+        .as('capacity');
+
+      const sales = db
+        .select({
+          eventId: orders.eventId,
+          grossPiastres:
+            sql<number>`COALESCE(SUM(${orders.totalPiastres}) FILTER (WHERE ${orders.status} = 'paid'), 0)::int`.as(
+              'gross_piastres',
+            ),
+          paidOrders:
+            sql<number>`COUNT(*) FILTER (WHERE ${orders.status} = 'paid')::int`.as(
+              'paid_orders',
+            ),
+        })
+        .from(orders)
+        .groupBy(orders.eventId)
+        .as('sales');
+
+      // Non-voided tickets only — a refund voids its tickets, and a voided seat
+      // is back on sale, so counting it as sold would overstate the event.
+      const sold = db
+        .select({
+          eventId: orders.eventId,
+          sold: sql<number>`COUNT(*)::int`.as('sold'),
+          checkedIn:
+            sql<number>`COUNT(*) FILTER (WHERE ${tickets.checkedInAt} IS NOT NULL)::int`.as(
+              'checked_in',
+            ),
+        })
+        .from(tickets)
+        .innerJoin(orders, eq(orders.id, tickets.orderId))
+        .where(isNull(tickets.voidedAt))
+        .groupBy(orders.eventId)
+        .as('sold');
+
+      return db
+        .select({
+          id: events.id,
+          slug: events.slug,
+          title: events.title,
+          venue: events.venue,
+          status: events.status,
+          startsAt: events.startsAt,
+          createdAt: events.createdAt,
+          capacity: sql<number>`COALESCE(${capacity.capacity}, 0)::int`,
+          tiers: sql<number>`COALESCE(${capacity.tiers}, 0)::int`,
+          minPricePiastres: capacity.minPrice,
+          grossPiastres: sql<number>`COALESCE(${sales.grossPiastres}, 0)::int`,
+          paidOrders: sql<number>`COALESCE(${sales.paidOrders}, 0)::int`,
+          ticketsSold: sql<number>`COALESCE(${sold.sold}, 0)::int`,
+          ticketsCheckedIn: sql<number>`COALESCE(${sold.checkedIn}, 0)::int`,
+        })
+        .from(events)
+        .leftJoin(capacity, eq(capacity.eventId, events.id))
+        .leftJoin(sales, eq(sales.eventId, events.id))
+        .leftJoin(sold, eq(sold.eventId, events.id))
+        .where(isAdmin ? undefined : eq(events.organizerId, ctx.user.id))
+        .orderBy(desc(events.startsAt));
+    }),
+
+    /** Headline tiles above the dashboard table, over the same scoped set. */
+    getMyTotals: protectedProcedure.query(async ({ ctx }) => {
+      const isAdmin = ctx.user.role === 'admin';
+      const scope = isAdmin ? undefined : eq(events.organizerId, ctx.user.id);
+
+      const [eventCounts] = await db
+        .select({
+          total: sql<number>`COUNT(*)::int`,
+          live: sql<number>`COUNT(*) FILTER (WHERE ${events.status} IN ('active', 'sold_out'))::int`,
+          draft: sql<number>`COUNT(*) FILTER (WHERE ${events.status} = 'draft')::int`,
+        })
+        .from(events)
+        .where(scope);
+
+      const [revenue] = await db
+        .select({
+          grossPiastres: sql<number>`COALESCE(SUM(${orders.totalPiastres}) FILTER (WHERE ${orders.status} = 'paid'), 0)::int`,
+          refundedPiastres: sql<number>`COALESCE(SUM(${orders.totalPiastres}) FILTER (WHERE ${orders.status} = 'refunded'), 0)::int`,
+          paidOrders: sql<number>`COUNT(*) FILTER (WHERE ${orders.status} = 'paid')::int`,
+        })
+        .from(orders)
+        .innerJoin(events, eq(events.id, orders.eventId))
+        .where(scope);
+
+      const [ticketCounts] = await db
+        .select({
+          issued: sql<number>`COUNT(*) FILTER (WHERE ${tickets.voidedAt} IS NULL)::int`,
+          checkedIn: sql<number>`COUNT(*) FILTER (WHERE ${tickets.checkedInAt} IS NOT NULL AND ${tickets.voidedAt} IS NULL)::int`,
+        })
+        .from(tickets)
+        .innerJoin(orders, eq(orders.id, tickets.orderId))
+        .innerJoin(events, eq(events.id, orders.eventId))
+        .where(scope);
+
+      return {
+        events: eventCounts.total,
+        liveEvents: eventCounts.live,
+        draftEvents: eventCounts.draft,
+        grossPiastres: revenue.grossPiastres,
+        refundedPiastres: revenue.refundedPiastres,
+        netPiastres: revenue.grossPiastres - revenue.refundedPiastres,
+        paidOrders: revenue.paidOrders,
+        ticketsIssued: ticketCounts.issued,
+        ticketsCheckedIn: ticketCounts.checkedIn,
+      };
+    }),
     /** Organizer-facing single fetch — unlike `getEvent`, this returns drafts. */
     getMyEvent: protectedProcedure
     .input(z.object({ id: z.string() }))

@@ -9,30 +9,43 @@ import { RackCard } from "./rack-card";
  */
 const FILTERS = ["All", "Music", "Comedy", "Conference", "Sport"];
 
-export function Rack({ events }: { events: EventListItem[] }) {
+export function Rack({
+  events,
+  heading = "Out now",
+  empty = "Nothing on sale right now. Check back — the rack refills every week.",
+  filters = true,
+  more = true,
+}: {
+  events: EventListItem[];
+  /** The rack head. `/tonight` reuses the grid under its own title. */
+  heading?: string;
+  empty?: string;
+  filters?: boolean;
+  more?: boolean;
+}) {
   return (
     <div className="shell rack" id="rack">
       <div className="rack-head">
-        <h2>Out now</h2>
+        <h2>{heading}</h2>
 
-        <div className="rack-filters">
-          {FILTERS.map((filter, i) => (
-            <button
-              key={filter}
-              type="button"
-              className={`pill pill-sm ${i === 0 ? "pill-solid" : "pill-ghost"}`}
-              aria-pressed={i === 0}
-            >
-              {filter}
-            </button>
-          ))}
-        </div>
+        {filters && (
+          <div className="rack-filters">
+            {FILTERS.map((filter, i) => (
+              <button
+                key={filter}
+                type="button"
+                className={`pill pill-sm ${i === 0 ? "pill-solid" : "pill-ghost"}`}
+                aria-pressed={i === 0}
+              >
+                {filter}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {events.length === 0 ? (
-        <p className="hero-lead">
-          Nothing on sale right now. Check back — the rack refills every week.
-        </p>
+        <p className="hero-lead">{empty}</p>
       ) : (
         // NOTE: the ground cross-fade in globals.css targets
         // `#s1:has(.rk:nth-child(N):hover)`, so nothing may precede the cards
@@ -44,7 +57,7 @@ export function Rack({ events }: { events: EventListItem[] }) {
         </div>
       )}
 
-      {events.length > 0 && (
+      {more && events.length > 0 && (
         <div className="rack-foot">
           <button type="button" className="pill pill-ghost">
             Show the rest

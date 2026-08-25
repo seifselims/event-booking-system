@@ -5,7 +5,7 @@ import { createTRPCOptionsProxy } from '@trpc/tanstack-react-query';
 import { headers } from 'next/headers';
 import { cache } from 'react';
 
-import { createTRPCContext } from './init';
+import { createCallerFactory, createTRPCContext } from './init';
 import { makeQueryClient } from './query-client';
 import { appRouter } from './routers/_app';
 
@@ -29,6 +29,17 @@ export const trpc = createTRPCOptionsProxy({
   router: appRouter,
   queryClient: getQueryClient,
 });
+
+/**
+ * Direct caller for Server Components that render data themselves rather than
+ * handing it to a Client Component.
+ *
+ * Use this when the result never needs to reach the browser as a query — the
+ * dashboard's tiles and tables, for instance. `trpc` + `prefetch` +
+ * `HydrateClient` is still the right path when a Client Component will read
+ * the same data through `useSuspenseQuery` (docs/prefetching/).
+ */
+export const caller = cache(async () => createCallerFactory(appRouter)(await createContext()));
 
 /**
  * Prefetch a query into the request's QueryClient. Fire-and-forget —

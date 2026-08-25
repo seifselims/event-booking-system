@@ -3,8 +3,11 @@ import Link from "next/link";
 /**
  * Public header. Lives under the landing route for now; promote it to a
  * top-level `components/` when the second public screen needs it.
+ *
+ * `current` marks the active link. It is passed by the page rather than read
+ * from `usePathname`, so this stays a Server Component.
  */
-export function SiteNav() {
+export function SiteNav({ current = "rack" }: { current?: "rack" | "tonight" }) {
   return (
     <nav className="nav">
       <Link className="logo" href="/">
@@ -13,10 +16,20 @@ export function SiteNav() {
       </Link>
 
       <div className="nav-mid">
-        <Link className="on" href="/">
+        <Link
+          className={current === "rack" ? "on" : undefined}
+          href="/"
+          aria-current={current === "rack" ? "page" : undefined}
+        >
           Rack
         </Link>
-        <Link href="/#rack">Tonight</Link>
+        <Link
+          className={current === "tonight" ? "on" : undefined}
+          href="/tonight"
+          aria-current={current === "tonight" ? "page" : undefined}
+        >
+          Tonight
+        </Link>
         <Link href="/tickets">My tickets</Link>
       </div>
 

@@ -13,14 +13,22 @@ import { signIn } from "@/lib/auth-client";
  * Errors stay generic on purpose: an invalid email and a wrong password give
  * the same message, so the form can't be used to enumerate accounts.
  */
-export function SignInForm() {
+export function SignInForm({
+  /** Where to land after a successful sign-in, absent a valid `?next=`. */
+  fallback = "/dashboard",
+  /** Admin door: the destination decides, so the label says so. */
+  submitLabel = "Sign in →",
+}: {
+  fallback?: string;
+  submitLabel?: string;
+} = {}) {
   const router = useRouter();
   const params = useSearchParams();
 
   // Where the middleware/guard bounced them from. Same-origin paths only —
   // an absolute URL here would be an open redirect.
   const raw = params.get("next");
-  const next = raw && raw.startsWith("/") && !raw.startsWith("//") ? raw : "/dashboard";
+  const next = raw && raw.startsWith("/") && !raw.startsWith("//") ? raw : fallback;
 
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -41,7 +49,7 @@ export function SignInForm() {
     if (signInError) {
       setError(
         signInError.status === 401 || signInError.status === 403
-          ? "That email and password don't match an organizer account."
+          ? "That email and password don't match an account."
           : "Something went wrong on our end. Try again in a moment.",
       );
       setPending(false);
@@ -93,7 +101,7 @@ export function SignInForm() {
       </div>
 
       <button className="pill pill-turq gate-submit" type="submit" disabled={pending}>
-        {pending ? "Checking…" : "Sign in →"}
+        {pending ? "Checking…" : submitLabel}
       </button>
     </form>
   );
