@@ -82,7 +82,10 @@ export function EventsTable({ isAdmin }: { isAdmin: boolean }) {
               return (
                 <tr key={event.id}>
                   <td>
-                    <Link className="tbl-title" href={`/e/${event.slug}`}>
+                    <Link
+                      className="tbl-title"
+                      href={`/dashboard/events/${event.id}`}
+                    >
                       {event.title}
                     </Link>
                     <span className="tbl-sub">{event.venue}</span>

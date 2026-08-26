@@ -50,7 +50,10 @@ const createEventInput = z.object({
   title: z.string().min(1).max(200),
   venue: z.string().min(1).max(200),
   description: z.string().max(5000).optional(),
-  posterUrl: z.url().optional(),
+  // Nullable, not just optional: the column is nullable, and removing a poster
+  // has to be expressible. Omitted leaves it alone, `null` clears it — an
+  // absent key is a no-op in `.set()`, so the two cannot share a representation.
+  posterUrl: z.url().nullable().optional(),
   startsAt: z.date(),
   endsAt: z.date().optional(),
 });

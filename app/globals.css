@@ -1202,6 +1202,12 @@ button {
   background: rgba(246, 214, 179, 0.18);
 }
 
+/* The screen you are on. The bar is brown, so this reads against `--ink`
+   rather than the console's cream body. */
+.console-nav a.on {
+  background: rgba(246, 214, 179, 0.28);
+}
+
 .console-who {
   margin-left: auto;
   display: flex;
@@ -1253,6 +1259,12 @@ button {
   text-transform: uppercase;
   color: var(--color-tangerine);
   margin-bottom: 10px;
+}
+
+/* Sits tighter to the title on the console than on the doors, where the eyebrow
+   has a whole field to breathe in. Scoped so the sign-in doors keep their gap. */
+.console-head .gate-eyebrow {
+  margin-bottom: 4px;
 }
 
 .console-title {
@@ -1502,6 +1514,437 @@ button {
   color: var(--color-brown-soft);
   max-width: 42ch;
   margin: 0 auto;
+}
+
+/* ============ THE EVENT EDITOR (/dashboard/events/[id]) ============
+   Console furniture: cream ground, brown ink, accent only where it carries
+   meaning. The doors' `.fld` fields are reused unchanged — they are already
+   brown-on-white and read correctly here. */
+
+/* `.fld` styled only `input`; the editor adds a textarea and selects. */
+.fld textarea,
+.fld select {
+  font: inherit;
+  font-size: 16px; /* ≥16px so iOS Safari doesn't zoom on focus */
+  font-weight: 600;
+  width: 100%;
+  padding: 13px 16px;
+  color: var(--color-brown);
+  background: #fff;
+  border: 2px solid rgba(58, 31, 22, 0.28);
+  border-radius: 12px;
+  transition:
+    border-color 0.18s,
+    box-shadow 0.18s;
+}
+
+.fld textarea {
+  min-height: 120px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.fld textarea::placeholder {
+  color: rgba(58, 31, 22, 0.36);
+  font-weight: 500;
+}
+
+.fld textarea:hover,
+.fld select:hover {
+  border-color: rgba(58, 31, 22, 0.5);
+}
+
+.fld textarea:focus,
+.fld select:focus {
+  outline: none;
+  border-color: var(--color-turquoise-deep);
+  box-shadow: 0 0 0 4px rgba(0, 199, 195, 0.28);
+}
+
+.fld textarea:disabled,
+.fld select:disabled {
+  opacity: 0.6;
+}
+
+/* A hint under a field — which clock a datetime means, what a URL is for. */
+.fld-hint {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-brown-soft);
+  opacity: 0.8;
+}
+
+/* ---- editor layout ---- */
+.ed-body {
+  padding: 22px;
+}
+
+.ed-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 17px;
+}
+
+/* Title, poster and description want the full measure. */
+.ed-grid .fld-wide {
+  grid-column: 1 / -1;
+}
+
+.ed-foot {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 2px solid rgba(58, 31, 22, 0.12);
+}
+
+/* Reassurance that a save landed; paired with role="status" in the markup. */
+.ed-saved {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--color-turquoise-deep);
+}
+
+.ed-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.ed-back {
+  display: inline-block;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-brown-soft);
+  margin-bottom: 12px;
+  transition: color 0.18s;
+}
+
+.ed-back:hover {
+  color: var(--color-tangerine);
+}
+
+.ed-title-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+/* ---- console buttons ----
+   `.pill` takes its border and text from `--ink`, which `:root` sets to white
+   and `.console` never overrides — a bare pill on this cream ground would be
+   invisible. These two are self-contained, in the same spirit as the scoped
+   `.gate-submit` override above. */
+.btn-console {
+  border-color: rgba(58, 31, 22, 0.42);
+  color: var(--color-brown);
+  background: transparent;
+}
+
+.btn-console:hover:not([disabled]) {
+  background: var(--color-brown);
+  border-color: var(--color-brown);
+  color: var(--color-cream);
+}
+
+/* Destructive: tangerine, never tangerine-bright — the bright fails contrast. */
+.btn-danger {
+  border-color: var(--color-tangerine);
+  color: var(--color-tangerine);
+  background: transparent;
+}
+
+.btn-danger:hover:not([disabled]) {
+  background: var(--color-tangerine);
+  border-color: var(--color-tangerine);
+  color: #fff;
+}
+
+/* `.pill-turq` hovers to white, which vanishes on cream — darken instead. */
+.ed-foot .pill-turq:hover:not([disabled]),
+.tier-form .pill-turq:hover:not([disabled]) {
+  background: var(--color-turquoise-deep);
+  border-color: var(--color-turquoise-deep);
+  color: var(--color-brown);
+}
+
+/* ---- ticket tiers ---- */
+.tier-price {
+  font-weight: 800;
+}
+
+.tier-acts {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+/* ---- poster field ----
+   Thumbnail beside its controls, so the organizer sees what is actually stored
+   rather than trusting a URL string. */
+.poster-field {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.poster-thumb {
+  width: 108px;
+  aspect-ratio: 3 / 4;
+  flex: none;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 2px solid rgba(58, 31, 22, 0.28);
+  background: rgba(246, 214, 179, 0.35);
+}
+
+/* The empty state is a slot, not a failure — most events never get a poster
+   and fall back to the authored art in `event-art.tsx`. */
+.poster-thumb-empty {
+  display: grid;
+  place-items: center;
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-brown-soft);
+  border-style: dashed;
+}
+
+.poster-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+
+/* The real input is driven by the buttons above it — a bare file input can't
+   be styled to match the console, and its "no file chosen" text lies once an
+   upload has landed. */
+.poster-file {
+  display: none;
+}
+
+.poster-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.poster-error {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-tangerine);
+}
+
+@media (max-width: 560px) {
+  .poster-field {
+    flex-direction: column;
+  }
+}
+
+/* The inline add/edit row, opened under the tier table. */
+.tier-form {
+  padding: 20px 22px;
+  border-top: 2px solid rgba(58, 31, 22, 0.12);
+  background: rgba(246, 214, 179, 0.18);
+}
+
+.tier-form h3 {
+  font-size: 17px;
+  margin-bottom: 14px;
+}
+
+.tier-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.tier-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+/* Why a tier can't be removed, sitting where its Delete button would be. */
+.tier-locked {
+  font-size: 12px;
+  font-style: italic;
+  color: var(--color-brown-soft);
+  opacity: 0.75;
+}
+
+/* ---- status panel ---- */
+.status-body {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  padding: 22px;
+}
+
+.status-note {
+  font-size: 14px;
+  color: var(--color-brown-soft);
+  max-width: 52ch;
+  flex: 1;
+  min-width: 220px;
+}
+
+.status-acts {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* ---- organizers (platform console) ---- */
+
+/* The roster sits under the events table, which has its own bottom edge. */
+.org-panel {
+  margin-top: 34px;
+}
+
+/* One field per row: the dialog is a narrow column, so three across would
+   crush the inputs. */
+.org-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+
+/* ---- dialog ----
+   The only modal in the app. Provisioning is a create-only act with no row to
+   edit in place, so it gets a dialog rather than the inline disclosure the tier
+   form uses — that one opens *under* the row it edits, which is the point of it.
+
+   Uses <dialog> + showModal(), so the top layer, focus trapping, inert
+   background, and Escape are the platform's rather than ours.
+
+   z-index stays below body::before/::after (9997/9998) so the print grain and
+   paper tooth still fall across the dialog — it is a card on the same paper as
+   everything else, not a pane floating over it. */
+.modal {
+  position: fixed;
+  z-index: 9000;
+  margin: auto;
+  padding: 0;
+  width: min(440px, calc(100vw - 44px));
+  max-height: calc(100vh - 88px);
+  border: 2px solid rgba(58, 31, 22, 0.18);
+  border-radius: var(--radius-sleeve);
+  background: var(--color-cream);
+  color: var(--color-brown);
+  box-shadow: 0 30px 60px -18px rgba(58, 31, 22, 0.6);
+  overflow: visible;
+}
+
+.modal::backdrop {
+  background: rgba(58, 31, 22, 0.62);
+  backdrop-filter: blur(5px);
+}
+
+/* The dialog is a `.console` child in spirit but not in the DOM — <dialog>
+   renders in the top layer, outside the console's subtree — so it restates the
+   ink the console sets. Without this a `.pill` inside would inherit :root's
+   white and vanish on cream. */
+.modal {
+  --ink: var(--color-brown);
+}
+
+.modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  padding: 20px 22px 0;
+}
+
+.modal-head h3 {
+  font-size: 21px;
+}
+
+.modal-note {
+  padding: 8px 22px 0;
+  font-size: 13px;
+  color: var(--color-brown-soft);
+  max-width: 46ch;
+}
+
+.modal-body {
+  padding: 18px 22px 0;
+}
+
+.modal-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 20px 22px 22px;
+}
+
+/* `.pill-turq` hovers to white, which vanishes on cream — darken instead
+   (the same correction `.ed-foot` and `.tier-form` make). */
+.modal-foot .pill-turq:hover:not([disabled]) {
+  background: var(--color-turquoise-deep);
+  border-color: var(--color-turquoise-deep);
+  color: var(--color-brown);
+}
+
+.modal[open] {
+  animation: modal-in 0.18s ease-out;
+}
+
+.modal[open]::backdrop {
+  animation: backdrop-in 0.18s ease-out;
+}
+
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@keyframes backdrop-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal[open],
+  .modal[open]::backdrop {
+    animation: none;
+  }
+}
+
+/* Account role, not event status: separate from `.tag-*`, which is a
+   lifecycle vocabulary and shouldn't be borrowed for a different axis. */
+.tag-role-admin {
+  background: var(--color-turquoise);
+  color: var(--color-brown);
+}
+
+.tag-role-organizer {
+  background: rgba(58, 31, 22, 0.12);
+  color: var(--color-brown-soft);
+}
+
+@media (max-width: 880px) {
+  .ed-grid,
+  .tier-grid,
+  .org-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* Admin door: a darker field than the organizer's, same furniture. */

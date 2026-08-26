@@ -200,4 +200,44 @@ export const ticketsRouter = createTRPCRouter({
 
       return ticketType;
     }),
+
+  /**
+   * Remove a tier that was never sold.
+   *
+   * `order_items.ticket_type_id` and `tickets.ticket_type_id` reference this
+   * table *without* `onDelete: cascade`, so a tier with sales cannot be deleted
+   * — the FK would reject it, and orphaning an issued ticket from the tier that
+   * priced it would lose the record of what someone actually bought. The check
+   * lives here rather than only in the UI because a procedure is reachable
+   * without ever rendering its page.
+   */
+  deleteTicketType: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const existing = await assertOwnsTicketType(
+        input.id,
+        ctx.user.id,
+        ctx.user.role === 'admin',
+      );
+
+      const [sold] = await db
+        .select({ count: sql<number>`COUNT(*)::int` })
+        .from(orderItems)
+        .where(eq(orderItems.ticketTypeId, input.id));
+
+      if (sold.count > 0) {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message:
+            'This tier has already sold tickets and cannot be deleted. Set its quantity to what has sold to stop further sales.',
+        });
+      }
+
+      await db.delete(ticketTypes).where(eq(ticketTypes.id, input.id));
+
+      // The event may have been sold out only because this tier was exhausted.
+      await syncSoldOut(db, existing.eventId);
+
+      return { id: input.id, eventId: existing.eventId };
+    }),
 });
