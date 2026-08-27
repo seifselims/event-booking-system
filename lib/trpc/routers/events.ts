@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto';
 
 import { TRPCError } from '@trpc/server';
-import { and, asc, desc, eq, gte, inArray, isNull, lt, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNull, lt, ne, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
+import { deleteOwnBlob, isOwnBlobUrl } from '@/lib/blob';
 import { db } from '@/lib/db';
 import { events, orders, ticketTypes, tickets } from '@/lib/db/schema';
 
@@ -37,6 +38,30 @@ const TONIGHT_ZONE = 'Africa/Cairo';
 
 /** Start of the next Cairo day, as a `timestamptz`. */
 const CAIRO_DAY_END = sql`((date_trunc('day', now() AT TIME ZONE ${TONIGHT_ZONE}) + interval '1 day') AT TIME ZONE ${TONIGHT_ZONE})`;
+
+/**
+ * Delete a poster that an event has stopped using — unless another event is
+ * still pointing at it.
+ *
+ * The same URL can legitimately sit on two rows: `poster_url` accepts pasted
+ * links, so an organizer can copy an existing event's poster URL into a second
+ * event. Deleting on the first event's save would then blank the second one's
+ * artwork with no way to recover it, so the file is only released once nothing
+ * references it. Uploads carry a random suffix and are therefore unique, which
+ * makes this rare — but it is silent and unrecoverable when it happens.
+ */
+async function releasePoster(url: string, exceptEventId: string) {
+  if (!isOwnBlobUrl(url)) return;
+
+  const stillUsed = await db.query.events.findFirst({
+    columns: { id: true },
+    where: and(eq(events.posterUrl, url), ne(events.id, exceptEventId)),
+  });
+
+  if (stillUsed) return;
+
+  await deleteOwnBlob(url);
+}
 
 /** Lowercase, hyphenated, punctuation stripped — `slug` is globally unique. */
 function slugify(title: string) {
@@ -138,6 +163,17 @@ export const eventsRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const { id, ...changes } = input;
 
+      // The row as it stands, so the poster it is about to lose can be cleaned
+      // up. Read inside the same ownership scope: on someone else's event this
+      // comes back undefined and the UPDATE below throws NOT_FOUND anyway.
+      const before =
+        changes.posterUrl !== undefined
+          ? await db.query.events.findFirst({
+              columns: { posterUrl: true },
+              where: ownsEvent(id, ctx.user.id, ctx.user.role === 'admin'),
+            })
+          : undefined;
+
       const [event] = await db
         .update(events)
         .set(changes)
@@ -145,6 +181,13 @@ export const eventsRouter = createTRPCRouter({
         .returning();
 
       if (!event) throw new TRPCError({ code: 'NOT_FOUND' });
+
+      // Replaced or removed: the previous file is now unreferenced. Deleted
+      // after the write, and only once it succeeded — losing the bytes while
+      // the row still points at them would be worse than leaking them.
+      if (before?.posterUrl && before.posterUrl !== event.posterUrl) {
+        await releasePoster(before.posterUrl, id);
+      }
 
       return event;
     }),
