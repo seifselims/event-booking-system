@@ -57,6 +57,16 @@ export function EventDetailsForm({ event }: { event: Event }) {
     (key) => draft[key].trim() !== saved[key].trim(),
   );
 
+  // Live, so the field is marked as soon as the pair stops making sense. The
+  // server refuses the same thing independently — validating one date against
+  // the other requires reading the stored row, since either may be absent from
+  // a partial update.
+  const datesInvalid = (() => {
+    const startsAt = fromCairoInputValue(draft.startsAt);
+    const endsAt = fromCairoInputValue(draft.endsAt);
+    return Boolean(startsAt && endsAt && endsAt <= startsAt);
+  })();
+
   const update = useMutation(
     trpc.events.updateEvent.mutationOptions({
       onSuccess: (updated) => {
@@ -88,6 +98,8 @@ export function EventDetailsForm({ event }: { event: Event }) {
     const startsAt = fromCairoInputValue(draft.startsAt);
     if (!startsAt) return;
 
+    if (datesInvalid) return;
+
     const endsAt = fromCairoInputValue(draft.endsAt);
 
     update.mutate({
@@ -95,9 +107,10 @@ export function EventDetailsForm({ event }: { event: Event }) {
       title: draft.title.trim(),
       venue: draft.venue.trim(),
       startsAt,
-      // `.partial()` means omitted keys are left alone; a cleared optional field
-      // has to be sent as undefined rather than dropped silently.
-      ...(endsAt ? { endsAt } : {}),
+      // Sent as null when cleared, not omitted — an absent key means "leave it
+      // alone", which would make clearing the end time appear to work and then
+      // silently keep the old one.
+      endsAt: endsAt ?? null,
       // A cleared poster is sent as null rather than omitted — omitting means
       // "leave it alone", which would make Remove appear to work and then
       // silently keep the old image.
@@ -116,7 +129,12 @@ export function EventDetailsForm({ event }: { event: Event }) {
         <p className="gate-error" role="alert">
           {update.error.data?.code === "NOT_FOUND"
             ? "That event no longer exists, or it isn't yours to edit."
-            : "Couldn't save those changes. Try again in a moment."}
+            : update.error.data?.code === "BAD_REQUEST"
+              ? // Says what was actually wrong — the server validates dates
+                // against the stored row, so it can refuse things the form
+                // could not see.
+                update.error.message
+              : "Couldn't save those changes. Try again in a moment."}
         </p>
       ) : null}
 
@@ -163,9 +181,17 @@ export function EventDetailsForm({ event }: { event: Event }) {
             type="datetime-local"
             value={draft.endsAt}
             onChange={(e) => set("endsAt", e.target.value)}
+            min={draft.startsAt || undefined}
+            aria-invalid={datesInvalid}
             disabled={pending}
           />
-          <span className="fld-hint">Optional · Cairo time</span>
+          {datesInvalid ? (
+            <span className="fld-bad" role="alert">
+              The end time must be after the start time.
+            </span>
+          ) : (
+            <span className="fld-hint">Optional · Cairo time</span>
+          )}
         </label>
 
         <PosterField
@@ -196,7 +222,7 @@ export function EventDetailsForm({ event }: { event: Event }) {
         <button
           className="pill pill-turq"
           type="submit"
-          disabled={!dirty || pending}
+          disabled={!dirty || pending || datesInvalid}
         >
           {pending ? "Saving…" : "Save changes"}
         </button>

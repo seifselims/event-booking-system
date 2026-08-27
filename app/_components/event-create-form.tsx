@@ -21,6 +21,9 @@ function blankTier(): TierDraft {
   return { key: crypto.randomUUID(), name: "", price: "", quantity: "" };
 }
 
+/** Mirrors the message `createEvent` throws, so both paths read the same. */
+const ENDS_BEFORE_STARTS = "The end time must be after the start time.";
+
 /**
  * Create an event, with its first ticket tiers.
  *
@@ -49,9 +52,17 @@ export function EventCreateForm() {
   const [tiers, setTiers] = useState<TierDraft[]>([blankTier()]);
   const [invalid, setInvalid] = useState<string | null>(null);
 
+  // Live, so the field is marked the moment the pair stops making sense rather
+  // than on submit. The server refuses the same thing independently.
+  const datesInvalid = (() => {
+    const starts = fromCairoInputValue(startsAt);
+    const ends = fromCairoInputValue(endsAt);
+    return Boolean(starts && ends && ends <= starts);
+  })();
+
   const create = useMutation(
     trpc.events.createEvent.mutationOptions({
-      onSuccess: (event) => {
+      onSuccess: () => {
         // The dashboard listing and its tiles are both stale now.
         void queryClient.invalidateQueries({
           queryKey: trpc.events.getMyEventsWithStats.queryKey(),
@@ -60,7 +71,7 @@ export function EventCreateForm() {
           queryKey: trpc.events.getMyTotals.queryKey(),
         });
 
-        router.push(`/dashboard/events/${event.id}`);
+        router.push("/dashboard");
       },
     }),
   );
@@ -72,7 +83,10 @@ export function EventCreateForm() {
     );
   }
 
-  function onSubmit(submitEvent: React.FormEvent<HTMLFormElement>) {
+  function onSubmit(
+    submitEvent: React.FormEvent<HTMLFormElement>,
+    status: "draft" | "active",
+  ) {
     submitEvent.preventDefault();
     if (create.isPending) return;
 
@@ -82,15 +96,30 @@ export function EventCreateForm() {
       return;
     }
 
-    const ends = fromCairoInputValue(endsAt);
-    if (ends && ends <= starts) {
-      setInvalid("The end time has to be after the start time.");
+    if (datesInvalid) {
+      setInvalid(ENDS_BEFORE_STARTS);
       return;
     }
+
+    const ends = fromCairoInputValue(endsAt);
 
     // A tier counts as filled in once it has a name; a wholly blank row is the
     // organizer declining to price the event yet, which `draft` allows.
     const filled = tiers.filter((tier) => tier.name.trim());
+
+    // The same two rules `createEvent` enforces — checked here for an immediate
+    // message rather than a round-trip.
+    if (status === "active") {
+      if (!filled.length) {
+        setInvalid("Add a ticket tier before publishing, or there is nothing to sell.");
+        return;
+      }
+
+      if ((ends ?? starts) <= new Date()) {
+        setInvalid("That date has already passed, so it can't be published.");
+        return;
+      }
+    }
 
     for (const tier of filled) {
       const quantity = Number(tier.quantity);
@@ -110,6 +139,7 @@ export function EventCreateForm() {
     setInvalid(null);
 
     create.mutate({
+      status,
       title: title.trim(),
       venue: venue.trim(),
       startsAt: starts,
@@ -132,8 +162,31 @@ export function EventCreateForm() {
 
   const pending = create.isPending;
 
+  // Both buttons share this: the difference between them is the status, not
+  // what the form needs filled in. Publishing's extra rules (tiers, a future
+  // date) are reported on submit, so the reason is stated rather than left as
+  // a dead button.
+  const incomplete =
+    pending || !title.trim() || !venue.trim() || !startsAt || datesInvalid;
+
   return (
-    <form className="ed-stack" onSubmit={onSubmit} noValidate>
+    <form
+      className="ed-stack"
+      // `submitter` is the button that was actually pressed, so the status comes
+      // straight from the click rather than from state that would lag it.
+      // Enter in a text field has no submitter, which falls through to draft —
+      // the conservative default.
+      onSubmit={(e) =>
+        onSubmit(
+          e,
+          (e.nativeEvent as SubmitEvent).submitter?.getAttribute("value") ===
+            "active"
+            ? "active"
+            : "draft",
+        )
+      }
+      noValidate
+    >
       <div className="panel">
         <div className="panel-head">
           <h2>Details</h2>
@@ -142,7 +195,9 @@ export function EventCreateForm() {
         <div className="ed-body">
           {create.error ? (
             <p className="gate-error" role="alert">
-              Couldn&apos;t create the event. Try again in a moment.
+              {create.error.data?.code === "BAD_REQUEST"
+                ? create.error.message
+                : "Couldn't create the event. Try again in a moment."}
             </p>
           ) : null}
 
@@ -177,7 +232,10 @@ export function EventCreateForm() {
               <input
                 type="datetime-local"
                 value={startsAt}
-                onChange={(e) => setStartsAt(e.target.value)}
+                onChange={(e) => {
+                  setInvalid(null);
+                  setStartsAt(e.target.value);
+                }}
                 required
                 disabled={pending}
               />
@@ -189,10 +247,23 @@ export function EventCreateForm() {
               <input
                 type="datetime-local"
                 value={endsAt}
-                onChange={(e) => setEndsAt(e.target.value)}
+                onChange={(e) => {
+                  setInvalid(null);
+                  setEndsAt(e.target.value);
+                }}
+                // The start field is the minimum the browser will offer, which
+                // heads most of these off before the message is ever needed.
+                min={startsAt || undefined}
+                aria-invalid={datesInvalid}
                 disabled={pending}
               />
-              <span className="fld-hint">Optional · Cairo time</span>
+              {datesInvalid ? (
+                <span className="fld-bad" role="alert">
+                  {ENDS_BEFORE_STARTS}
+                </span>
+              ) : (
+                <span className="fld-hint">Optional · Cairo time</span>
+              )}
             </label>
 
             <PosterField
@@ -310,15 +381,26 @@ export function EventCreateForm() {
 
           <div className="ed-foot" style={{ marginTop: 0, borderTop: "none" }}>
             <span className="status-note" style={{ marginRight: "auto" }}>
-              Created as a draft — nothing goes public until you publish it.
+              A draft stays private to you. Publishing puts it on the public site
+              and opens sales — you can do it later from the editor.
             </span>
+
+            <button
+              className="pill btn-console"
+              type="submit"
+              value="draft"
+              disabled={incomplete}
+            >
+              {pending ? "Working…" : "Save as draft"}
+            </button>
 
             <button
               className="pill pill-turq"
               type="submit"
-              disabled={pending || !title.trim() || !venue.trim() || !startsAt}
+              value="active"
+              disabled={incomplete}
             >
-              {pending ? "Creating…" : "Create event"}
+              {pending ? "Working…" : "Publish now"}
             </button>
           </div>
         </div>

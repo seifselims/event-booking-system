@@ -87,21 +87,43 @@ function slugify(title: string) {
     .replace(/^-+|-+$/g, '');
 }
 
-const createEventInput = z.object({
-  title: z.string().min(1).max(200),
-  venue: z.string().min(1).max(200),
-  description: z.string().max(5000).optional(),
-  // Nullable, not just optional: the column is nullable, and removing a poster
-  // has to be expressible. Omitted leaves it alone, `null` clears it — an
-  // absent key is a no-op in `.set()`, so the two cannot share a representation.
-  posterUrl: z.url().nullable().optional(),
-  startsAt: z.date(),
-  endsAt: z.date().optional(),
-});
+/** An event cannot finish before it starts. Shared by both write paths. */
+const ENDS_BEFORE_STARTS = 'The end time must be after the start time.';
 
-const updateEventInput = createEventInput.partial().extend({
-  id: z.string(),
-});
+const createEventInput = z
+  .object({
+    title: z.string().min(1).max(200),
+    venue: z.string().min(1).max(200),
+    description: z.string().max(5000).optional(),
+    // Nullable, not just optional: the column is nullable, and removing a poster
+    // has to be expressible. Omitted leaves it alone, `null` clears it — an
+    // absent key is a no-op in `.set()`, so the two cannot share a representation.
+    posterUrl: z.url().nullable().optional(),
+    startsAt: z.date(),
+    endsAt: z.date().optional(),
+  })
+  .refine((input) => !input.endsAt || input.endsAt > input.startsAt, {
+    message: ENDS_BEFORE_STARTS,
+    path: ['endsAt'],
+  });
+
+/**
+ * `.partial()` cannot carry the refine above: on an update either date may be
+ * absent, and the one that is missing has to come from the stored row. The
+ * cross-field check therefore lives in the `updateEvent` mutation, which can
+ * read the event first.
+ */
+const updateEventInput = z
+  .object({
+    title: z.string().min(1).max(200),
+    venue: z.string().min(1).max(200),
+    description: z.string().max(5000),
+    posterUrl: z.url().nullable(),
+    startsAt: z.date(),
+    endsAt: z.date().nullable(),
+  })
+  .partial()
+  .extend({ id: z.string() });
 
 /**
  * A first tier, created alongside its event.
@@ -118,10 +140,14 @@ const initialTierInput = z.object({
   maxPerOrder: z.int().min(1).max(100).optional(),
 });
 
-const createEventWithTiersInput = createEventInput.extend({
+const createEventWithTiersInput = createEventInput.safeExtend({
   // Optional: an organizer may create the shell now and price it later, which
   // is exactly what `draft` is for.
   tiers: z.array(initialTierInput).max(10).optional(),
+  // Publish straight away, or keep it a draft. Only these two: `cancelled` and
+  // `archived` are not states you create something in, and `sold_out` is
+  // derived from availability, never chosen.
+  status: z.enum(['draft', 'active']).default('draft'),
 });
 
 export const eventsRouter = createTRPCRouter({
@@ -197,6 +223,24 @@ export const eventsRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const { title, tiers, ...rest } = input;
 
+      // The same two preconditions the editor's status controls apply, enforced
+      // here because a procedure is reachable without ever rendering that UI.
+      if (rest.status === 'active') {
+        if (!tiers?.length) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Add a ticket tier before publishing, or there is nothing to sell.',
+          });
+        }
+
+        if ((rest.endsAt ?? rest.startsAt) <= new Date()) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'That date has already passed, so it cannot be published.',
+          });
+        }
+      }
+
       return db.transaction(async (tx) => {
         const [event] = await tx
           .insert(events)
@@ -229,16 +273,37 @@ export const eventsRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const { id, ...changes } = input;
 
-      // The row as it stands, so the poster it is about to lose can be cleaned
-      // up. Read inside the same ownership scope: on someone else's event this
+      const touchesDates =
+        changes.startsAt !== undefined || changes.endsAt !== undefined;
+
+      // The row as it stands. Needed to clean up a poster it is about to lose,
+      // and to validate a date change against the date that isn't being sent —
+      // `updateEventInput` is partial, so "ends before starts" can only be
+      // judged against the stored values.
+      //
+      // Read inside the same ownership scope: on someone else's event this
       // comes back undefined and the UPDATE below throws NOT_FOUND anyway.
       const before =
-        changes.posterUrl !== undefined
+        changes.posterUrl !== undefined || touchesDates
           ? await db.query.events.findFirst({
-              columns: { posterUrl: true },
+              columns: { posterUrl: true, startsAt: true, endsAt: true },
               where: ownsEvent(id, ctx.user.id, ctx.user.role === 'admin'),
             })
           : undefined;
+
+      if (touchesDates && before) {
+        // Whichever side isn't in this payload keeps its stored value.
+        const startsAt = changes.startsAt ?? before.startsAt;
+        const endsAt =
+          changes.endsAt !== undefined ? changes.endsAt : before.endsAt;
+
+        if (endsAt && endsAt <= startsAt) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: ENDS_BEFORE_STARTS,
+          });
+        }
+      }
 
       const [event] = await db
         .update(events)

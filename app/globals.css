@@ -1587,6 +1587,23 @@ button {
   opacity: 0.6;
 }
 
+/* Replaces `.fld-hint` when the field is wrong — same slot, so nothing shifts. */
+.fld-bad {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-tangerine);
+}
+
+/* Paired with `aria-invalid`, so the outline and the message arrive together. */
+.fld input[aria-invalid="true"] {
+  border-color: var(--color-tangerine);
+}
+
+.fld input[aria-invalid="true"]:focus {
+  border-color: var(--color-tangerine);
+  box-shadow: 0 0 0 4px rgba(174, 47, 0, 0.22);
+}
+
 /* A hint under a field — which clock a datetime means, what a URL is for. */
 .fld-hint {
   font-size: 12px;
