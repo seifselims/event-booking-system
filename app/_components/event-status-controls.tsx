@@ -74,19 +74,39 @@ export function EventStatusControls({ event }: { event: Event }) {
 
       <div className="status-body">
         <p className="status-note">
-          {NOTE[event.status]}
+          {/* `isPast` is derived per read, not swept into `status` — a finished
+              event is described as over wherever it is shown, but archiving it
+              stays the organizer's call. See `IS_PAST` in routers/events.ts. */}
+          {event.isPast && live
+            ? "This event has already happened. It no longer appears on the public site — archive it to file it away."
+            : NOTE[event.status]}
           {event.status === "draft" && !hasTiers ? (
             <> Add a ticket tier before publishing, or there is nothing to sell.</>
           ) : null}
         </p>
 
         <div className="status-acts">
+          {/* A finished event can be archived directly, without cancelling it
+              first — cancelling implies calling off something still to come. */}
+          {event.isPast && event.status !== "archived" ? (
+            <button
+              className="pill pill-sm btn-console"
+              type="button"
+              onClick={() => move("archived")}
+              disabled={pending}
+            >
+              Archive
+            </button>
+          ) : null}
+
           {event.status === "draft" ? (
             <button
               className="pill pill-sm pill-turq"
               type="button"
               onClick={() => move("active")}
-              disabled={pending || !hasTiers}
+              // Publishing a date that has already passed would put it on a
+              // public site that filters it straight back out.
+              disabled={pending || !hasTiers || event.isPast}
             >
               {pending ? "Working…" : "Publish"}
             </button>
@@ -119,7 +139,7 @@ export function EventStatusControls({ event }: { event: Event }) {
             </button>
           ) : null}
 
-          {event.status !== "archived" && !live ? (
+          {event.status !== "archived" && !live && !event.isPast ? (
             <button
               className="pill pill-sm btn-console"
               type="button"

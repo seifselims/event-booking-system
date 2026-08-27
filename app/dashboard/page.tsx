@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { StatTiles } from "../_components/stat-tiles";
 import { EventsTable } from "../_components/events-table";
@@ -45,6 +46,10 @@ export default async function DashboardPage() {
             Evening, <em>{firstName}</em>.
           </h1>
         </div>
+
+        <Link className="pill pill-turq" href="/dashboard/events/new">
+          New event
+        </Link>
       </div>
 
       <HydrateClient>

@@ -44,6 +44,12 @@ export function EventsTable({ isAdmin }: { isAdmin: boolean }) {
             ? "No organizer has published an event on the platform."
             : "Your first event will show up here once you create it."}
         </p>
+
+        {isAdmin ? null : (
+          <Link className="pill pill-turq" href="/dashboard/events/new">
+            Create your first event
+          </Link>
+        )}
       </div>
     );
   }
@@ -99,6 +105,13 @@ export function EventsTable({ isAdmin }: { isAdmin: boolean }) {
                     <span className={`tag tag-${event.status}`}>
                       {STATUS_LABEL[event.status]}
                     </span>
+
+                    {/* Derived, not stored: a past event reads as finished
+                        wherever it is listed, without anything having swept
+                        `status`. See `IS_PAST` in routers/events.ts. */}
+                    {event.isPast && event.status !== "archived" ? (
+                      <span className="tag tag-past">Past</span>
+                    ) : null}
                   </td>
 
                   <td className="ta-r">

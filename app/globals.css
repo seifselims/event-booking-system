@@ -1495,6 +1495,15 @@ button {
   color: var(--color-beige);
 }
 
+/* Derived, not a stored status — it sits *beside* the real tag rather than
+   replacing it, so "Live · Past" reads as a state the organizer can act on. */
+.tag-past {
+  margin-left: 6px;
+  background: transparent;
+  color: var(--color-brown-soft);
+  box-shadow: inset 0 0 0 2px rgba(58, 31, 22, 0.28);
+}
+
 /* ---- empty state ---- */
 .empty {
   background: #fff;
@@ -1514,6 +1523,18 @@ button {
   color: var(--color-brown-soft);
   max-width: 42ch;
   margin: 0 auto;
+}
+
+/* The empty state is the one place a first event can be started from, so its
+   call to action needs room under the copy. */
+.empty .pill {
+  margin-top: 22px;
+}
+
+.empty .pill-turq:hover {
+  background: var(--color-turquoise-deep);
+  border-color: var(--color-turquoise-deep);
+  color: var(--color-brown);
 }
 
 /* ============ THE EVENT EDITOR (/dashboard/events/[id]) ============
@@ -1748,6 +1769,34 @@ button {
 @media (max-width: 560px) {
   .poster-field {
     flex-direction: column;
+  }
+}
+
+/* ---- tier rows on the create page ----
+   Repeating rows rather than the editor's disclosed `.tier-form`: there is no
+   saved tier to open under yet, so each row is just a line being drafted. */
+.tier-new {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr auto;
+  gap: 14px;
+  align-items: end;
+  padding-bottom: 18px;
+  margin-bottom: 18px;
+  border-bottom: 2px solid rgba(58, 31, 22, 0.1);
+}
+
+/* Aligns the button with the inputs rather than their labels. */
+.tier-new-drop {
+  margin-bottom: 2px;
+}
+
+@media (max-width: 720px) {
+  .tier-new {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .tier-new .fld:first-child {
+    grid-column: 1 / -1;
   }
 }
 

@@ -63,6 +63,22 @@ async function releasePoster(url: string, exceptEventId: string) {
   await deleteOwnBlob(url);
 }
 
+/**
+ * Has this event already happened?
+ *
+ * Auto-archiving is *derived*, not written: nothing sweeps `events.status` when
+ * a date passes, because there is no job runner yet (see
+ * `docs/DEFERRED-JOBS.md`). Instead every read that cares computes it, which
+ * needs no scheduler and can never fight an organizer's own status choice.
+ *
+ * `endsAt` wins when set — a festival that runs past midnight is not "past"
+ * because its doors opened yesterday. Falls back to `startsAt` otherwise.
+ *
+ * Evaluated by Postgres so it does not depend on the container's clock, the
+ * same reasoning as `CAIRO_DAY_END` above.
+ */
+const IS_PAST = sql<boolean>`(COALESCE(${events.endsAt}, ${events.startsAt}) < now())`;
+
 /** Lowercase, hyphenated, punctuation stripped — `slug` is globally unique. */
 function slugify(title: string) {
   return title
@@ -87,12 +103,35 @@ const updateEventInput = createEventInput.partial().extend({
   id: z.string(),
 });
 
+/**
+ * A first tier, created alongside its event.
+ *
+ * Deliberately narrower than `createTicketTypeInput` in `routers/tickets.ts`:
+ * no `eventId` (the event does not exist yet), and no sales window — an
+ * organizer setting up a new event is choosing what to sell, not scheduling
+ * when it goes on sale. The full set is available in the editor afterwards.
+ */
+const initialTierInput = z.object({
+  name: z.string().min(1).max(100),
+  pricePiastres: z.int().min(0),
+  quantity: z.int().min(1),
+  maxPerOrder: z.int().min(1).max(100).optional(),
+});
+
+const createEventWithTiersInput = createEventInput.extend({
+  // Optional: an organizer may create the shell now and price it later, which
+  // is exactly what `draft` is for.
+  tiers: z.array(initialTierInput).max(10).optional(),
+});
+
 export const eventsRouter = createTRPCRouter({
   /** Public listing — publicly visible events only, newest first. */
   listEvents: baseProcedure.query(() =>
     db.query.events.findMany({
       orderBy: desc(events.createdAt),
-      where: inArray(events.status, PUBLIC_STATUSES),
+      // Past events drop off the public site without anyone archiving them —
+      // this is the derived half of auto-archive (see `IS_PAST`).
+      where: and(inArray(events.status, PUBLIC_STATUSES), sql`NOT ${IS_PAST}`),
       with: {
         ticketTypes: true,
       },
@@ -127,6 +166,10 @@ export const eventsRouter = createTRPCRouter({
         where: and(
           eq(events.id, input.id),
           inArray(events.status, PUBLIC_STATUSES),
+          // Consistent with `listEvents`: a past event is gone from the public
+          // site, so its page 404s rather than offering tickets to a finished
+          // door.
+          sql`NOT ${IS_PAST}`,
         ),
         with: {
           ticketTypes: true,
@@ -138,24 +181,47 @@ export const eventsRouter = createTRPCRouter({
       return event;
     }),
 
+  /**
+   * Create an event, optionally with its first ticket tiers.
+   *
+   * Both writes share one transaction: `ticket_types.event_id` is a foreign key,
+   * so the tiers cannot exist before the event — and a tier that fails to insert
+   * must not leave a priced-but-empty event behind. Either the whole event
+   * arrives configured or nothing does.
+   *
+   * The event lands as `draft` (the column default), so creating it never
+   * publishes it. Publishing is a separate, deliberate act in the editor.
+   */
   createEvent: protectedProcedure
-    .input(createEventInput)
+    .input(createEventWithTiersInput)
     .mutation(async ({ ctx, input }) => {
-      const { title, ...rest } = input;
+      const { title, tiers, ...rest } = input;
 
-      const [event] = await db
-        .insert(events)
-        .values({
-          id: randomUUID(),
-          organizerId: ctx.user.id,
-          title,
-          // Suffixed because `events_slug_uidx` is unique across all organizers.
-          slug: `${slugify(title)}-${randomUUID().slice(0, 8)}`,
-          ...rest,
-        })
-        .returning();
+      return db.transaction(async (tx) => {
+        const [event] = await tx
+          .insert(events)
+          .values({
+            id: randomUUID(),
+            organizerId: ctx.user.id,
+            title,
+            // Suffixed because `events_slug_uidx` is unique across all organizers.
+            slug: `${slugify(title)}-${randomUUID().slice(0, 8)}`,
+            ...rest,
+          })
+          .returning();
 
-      return event;
+        if (tiers?.length) {
+          await tx.insert(ticketTypes).values(
+            tiers.map((tier) => ({
+              id: randomUUID(),
+              eventId: event.id,
+              ...tier,
+            })),
+          );
+        }
+
+        return event;
+      });
     }),
 
   updateEvent: protectedProcedure
@@ -302,6 +368,7 @@ export const eventsRouter = createTRPCRouter({
           status: events.status,
           startsAt: events.startsAt,
           createdAt: events.createdAt,
+          isPast: IS_PAST,
           capacity: sql<number>`COALESCE(${capacity.capacity}, 0)::int`,
           tiers: sql<number>`COALESCE(${capacity.tiers}, 0)::int`,
           minPricePiastres: capacity.minPrice,
@@ -377,6 +444,11 @@ export const eventsRouter = createTRPCRouter({
 
       if (!event) throw new TRPCError({ code: 'NOT_FOUND' });
 
-      return event;
+      // Same rule as the SQL `IS_PAST`, applied in JS because the relational
+      // API selects columns rather than expressions. Both compare instants, so
+      // the container's zone doesn't enter into it.
+      const isPast = (event.endsAt ?? event.startsAt).getTime() < Date.now();
+
+      return { ...event, isPast };
     }),
 });
