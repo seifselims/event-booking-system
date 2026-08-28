@@ -151,6 +151,15 @@ export function TicketTiers({ event }: { event: Event }) {
       ) : (
         <div className="tbl-wrap">
           <table className="tbl">
+            {/* `table-layout: fixed` reads these — see events-table.tsx. */}
+            <colgroup>
+              <col style={{ width: "34%" }} />
+              <col style={{ width: "14%" }} />
+              <col style={{ width: "12%" }} />
+              <col style={{ width: "14%" }} />
+              <col style={{ width: "26%" }} />
+            </colgroup>
+
             <thead>
               <tr>
                 <th>Tier</th>

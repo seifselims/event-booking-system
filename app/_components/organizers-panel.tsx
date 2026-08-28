@@ -226,6 +226,15 @@ export function OrganizersPanel({ currentUserId }: { currentUserId: string }) {
 
       <div className="tbl-wrap">
         <table className="tbl">
+          {/* `table-layout: fixed` reads these — see events-table.tsx. */}
+          <colgroup>
+            <col style={{ width: "36%" }} />
+            <col style={{ width: "14%" }} />
+            <col style={{ width: "10%" }} />
+            <col style={{ width: "14%" }} />
+            <col style={{ width: "26%" }} />
+          </colgroup>
+
           <thead>
             <tr>
               <th>Organizer</th>

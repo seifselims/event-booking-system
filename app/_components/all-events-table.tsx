@@ -54,6 +54,16 @@ export function AllEventsTable() {
 
       <div className="tbl-wrap">
         <table className="tbl">
+          {/* `table-layout: fixed` reads these — see events-table.tsx. */}
+          <colgroup>
+            <col style={{ width: "28%" }} />
+            <col style={{ width: "24%" }} />
+            <col style={{ width: "14%" }} />
+            <col style={{ width: "12%" }} />
+            <col style={{ width: "10%" }} />
+            <col style={{ width: "12%" }} />
+          </colgroup>
+
           <thead>
             <tr>
               <th>Event</th>

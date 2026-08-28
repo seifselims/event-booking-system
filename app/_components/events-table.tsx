@@ -65,6 +65,17 @@ export function EventsTable({ isAdmin }: { isAdmin: boolean }) {
 
       <div className="tbl-wrap">
         <table className="tbl">
+          {/* `table-layout: fixed` reads these; without them a long title
+              stretched Event and pulled every other column off its header. */}
+          <colgroup>
+            <col style={{ width: "34%" }} />
+            <col style={{ width: "14%" }} />
+            <col style={{ width: "14%" }} />
+            <col style={{ width: "14%" }} />
+            <col style={{ width: "10%" }} />
+            <col style={{ width: "14%" }} />
+          </colgroup>
+
           <thead>
             <tr>
               <th>Event</th>
