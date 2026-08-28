@@ -23,10 +23,15 @@ export function PosterField({
   value,
   onChange,
   disabled,
+  label = "Poster",
+  hint,
 }: {
   value: string;
   onChange: (url: string) => void;
   disabled?: boolean;
+  /** The organizer roster reuses this widget for account pictures. */
+  label?: string;
+  hint?: string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -71,7 +76,7 @@ export function PosterField({
 
   return (
     <div className="fld fld-wide">
-      <span>Poster</span>
+      <span>{label}</span>
 
       <div className="poster-field">
         {value ? (
@@ -140,8 +145,8 @@ export function PosterField({
             </span>
           ) : (
             <span className="fld-hint">
-              JPEG, PNG, WebP or AVIF · up to 4MB. Events without a poster get
-              authored artwork.
+              {hint ??
+                "JPEG, PNG, WebP or AVIF · up to 4MB. Events without a poster get authored artwork."}
             </span>
           )}
         </div>

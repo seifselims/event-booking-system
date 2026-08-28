@@ -6,6 +6,11 @@ import { useState } from "react";
 
 import { PosterField } from "./poster-field";
 
+import {
+  EVENT_CATEGORIES,
+  categoryLabel,
+  type EventCategory,
+} from "@/lib/categories";
 import { fromCairoInputValue } from "@/lib/format";
 import { useTRPC } from "@/lib/trpc/react";
 
@@ -45,6 +50,7 @@ export function EventCreateForm() {
 
   const [title, setTitle] = useState("");
   const [venue, setVenue] = useState("");
+  const [category, setCategory] = useState<EventCategory>("music");
   const [startsAt, setStartsAt] = useState("");
   const [endsAt, setEndsAt] = useState("");
   const [posterUrl, setPosterUrl] = useState("");
@@ -142,6 +148,7 @@ export function EventCreateForm() {
       status,
       title: title.trim(),
       venue: venue.trim(),
+      category,
       startsAt: starts,
       ...(ends ? { endsAt: ends } : {}),
       ...(posterUrl.trim() ? { posterUrl: posterUrl.trim() } : {}),
@@ -225,6 +232,26 @@ export function EventCreateForm() {
                 required
                 disabled={pending}
               />
+            </label>
+
+            <label className="fld fld-wide">
+              <span>Category</span>
+              <select
+                value={category}
+                onChange={(e) =>
+                  setCategory(e.target.value as EventCategory)
+                }
+                disabled={pending}
+              >
+                {EVENT_CATEGORIES.map((option) => (
+                  <option key={option} value={option}>
+                    {categoryLabel(option)}
+                  </option>
+                ))}
+              </select>
+              <span className="fld-hint">
+                Which shelf this sits on in the rack
+              </span>
             </label>
 
             <label className="fld">

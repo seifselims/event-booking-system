@@ -32,6 +32,7 @@ import { randomUUID } from 'node:crypto';
 import { eq, inArray } from 'drizzle-orm';
 
 import { auth } from '../lib/auth';
+import type { EventCategory } from '../lib/categories';
 import { db } from '../lib/db';
 import {
   events,
@@ -119,6 +120,7 @@ type EventSpec = {
   startsAt: Date;
   endsAt: Date | null;
   status: 'draft' | 'active' | 'cancelled' | 'archived' | 'sold_out';
+  category: EventCategory;
   organizer: string;
   ticketTypes: TicketTypeSpec[];
   orders: OrderSpec[];
@@ -151,6 +153,7 @@ const ADMIN = {
 const EVENT_SPECS: EventSpec[] = [
   {
     slug: 'nile-delta-nights',
+    category: 'music',
     title: 'Nile Delta Nights',
     description:
       'Six hours across two stages on the edge of the desert. An orchestral takeover of the main room at sundown, then the basement opens until dawn.',
@@ -179,6 +182,7 @@ const EVENT_SPECS: EventSpec[] = [
   },
   {
     slug: 'cairo-design-summit',
+    category: 'conference',
     title: 'Cairo Design Summit',
     description:
       'Two days of talks and workshops on product design, typography, and the craft of shipping.',
@@ -199,6 +203,7 @@ const EVENT_SPECS: EventSpec[] = [
   },
   {
     slug: 'tarab-reimagined',
+    category: 'music',
     title: 'Tarab Reimagined',
     description:
       'A forty-piece orchestra rereads the standards, with arrangements written for this room.',
@@ -220,6 +225,7 @@ const EVENT_SPECS: EventSpec[] = [
   },
   {
     slug: 'standup-at-the-vault',
+    category: 'comedy',
     title: 'Standup at the Vault',
     description: 'Five comics, one basement, no phones. Strictly 18+.',
     venue: 'The Vault · Zamalek',
@@ -239,6 +245,7 @@ const EVENT_SPECS: EventSpec[] = [
   },
   {
     slug: 'sahel-closing-set',
+    category: 'nightlife',
     title: 'Sahel Closing Set',
     description:
       'The last night of the season on the North Coast. Doors at eleven, sunrise finish.',
@@ -258,6 +265,7 @@ const EVENT_SPECS: EventSpec[] = [
   },
   {
     slug: 'kickoff-derby',
+    category: 'sport',
     title: 'Kickoff Derby',
     description: 'The season opener. Gates open two hours before kickoff.',
     venue: 'Cairo International Stadium',
@@ -278,6 +286,7 @@ const EVENT_SPECS: EventSpec[] = [
     // Unpublished: must never appear in `listEvents`, but must show in the
     // organizer's own dashboard via `getMyEvents`.
     slug: 'winter-jazz-sessions',
+    category: 'music',
     title: 'Winter Jazz Sessions',
     description: 'Still being planned. Lineup to be announced.',
     venue: 'Room 9 · Garden City',
@@ -293,6 +302,7 @@ const EVENT_SPECS: EventSpec[] = [
   {
     // Cancelled: also hidden from the public listing.
     slug: 'desert-marathon-2026',
+    category: 'sport',
     title: 'Desert Marathon 2026',
     description: 'Cancelled by the organizer. Kept for reporting and refunds.',
     venue: 'Fayoum',
@@ -356,6 +366,7 @@ async function main() {
       title: spec.title,
       description: spec.description,
       venue: spec.venue,
+      category: spec.category,
       startsAt: spec.startsAt,
       endsAt: spec.endsAt,
       status: spec.status,

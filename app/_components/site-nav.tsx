@@ -7,7 +7,11 @@ import Link from "next/link";
  * `current` marks the active link. It is passed by the page rather than read
  * from `usePathname`, so this stays a Server Component.
  */
-export function SiteNav({ current = "rack" }: { current?: "rack" | "tonight" }) {
+export function SiteNav({
+  current = "rack",
+}: {
+  current?: "rack" | "tonight" | "organizers";
+}) {
   return (
     <nav className="nav">
       <Link className="logo" href="/">
@@ -29,6 +33,13 @@ export function SiteNav({ current = "rack" }: { current?: "rack" | "tonight" }) 
           aria-current={current === "tonight" ? "page" : undefined}
         >
           Tonight
+        </Link>
+        <Link
+          className={current === "organizers" ? "on" : undefined}
+          href="/organizers"
+          aria-current={current === "organizers" ? "page" : undefined}
+        >
+          Organizers
         </Link>
         <Link href="/tickets">My tickets</Link>
       </div>

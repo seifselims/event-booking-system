@@ -104,6 +104,25 @@ export const events = pgTable(
     description: text("description"),
     venue: text("venue").notNull(),
     posterUrl: text("poster_url"),
+    // Kept in lockstep with `EVENT_CATEGORIES` in `lib/categories.ts`, which is
+    // what the rack's filter pills and every Zod input read.
+    category: text("category", {
+      enum: [
+        "music",
+        "comedy",
+        "conference",
+        "sport",
+        "theatre",
+        "film",
+        "art",
+        "food",
+        "nightlife",
+        "workshop",
+        "other",
+      ],
+    })
+      .default("other")
+      .notNull(),
     startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
     endsAt: timestamp("ends_at", { withTimezone: true }),
     status: text("status", { enum: ["draft", "active", "cancelled", "archived","sold_out"] })
@@ -121,6 +140,7 @@ export const events = pgTable(
     uniqueIndex("events_slug_uidx").on(table.slug),
     index("events_organizerId_idx").on(table.organizerId),
     index("events_status_startsAt_idx").on(table.status, table.startsAt),
+    index("events_category_idx").on(table.category),
   ],
 );
 

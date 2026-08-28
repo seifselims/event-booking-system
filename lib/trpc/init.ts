@@ -52,3 +52,23 @@ export const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
   }
   return next({ ctx });
 });
+
+/**
+ * Organizers only — the mirror of `adminProcedure`.
+ *
+ * Most organizer-facing procedures use `protectedProcedure` and let admins
+ * *widen* their scope (`role === 'admin' ? undefined : eq(...)`). This is for
+ * the few actions an admin must not take at all: an admin creating an event
+ * would become its organizer, which is not a thing platform oversight should
+ * produce. Admins still edit and delete any organizer's events through the
+ * widening procedures.
+ */
+export const organizerProcedure = protectedProcedure.use(({ ctx, next }) => {
+  if (ctx.user.role === 'admin') {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'Admins cannot create events. Create one as an organizer instead.',
+    });
+  }
+  return next({ ctx });
+});

@@ -3,6 +3,11 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
+import {
+  EVENT_CATEGORIES,
+  categoryLabel,
+  type EventCategory,
+} from "@/lib/categories";
 import { fromCairoInputValue, toCairoInputValue } from "@/lib/format";
 import { useTRPC } from "@/lib/trpc/react";
 import type { RouterOutputs } from "@/lib/trpc/types";
@@ -11,10 +16,17 @@ import { PosterField } from "./poster-field";
 
 type Event = RouterOutputs["events"]["getMyEvent"];
 
-/** The editable half of an event, as strings — what the inputs actually hold. */
+/**
+ * The editable half of an event, as strings — what the inputs actually hold.
+ *
+ * `category` is one of a closed set rather than free text, so it is typed as
+ * the union: a `<select>` can only ever hold a valid value, and typing it as
+ * `string` would push the cast down to the mutation call instead.
+ */
 type Draft = {
   title: string;
   venue: string;
+  category: EventCategory;
   startsAt: string;
   endsAt: string;
   posterUrl: string;
@@ -25,6 +37,7 @@ function toDraft(event: Event): Draft {
   return {
     title: event.title,
     venue: event.venue,
+    category: event.category,
     startsAt: toCairoInputValue(event.startsAt),
     endsAt: event.endsAt ? toCairoInputValue(event.endsAt) : "",
     posterUrl: event.posterUrl ?? "",
@@ -53,6 +66,8 @@ export function EventDetailsForm({ event }: { event: Event }) {
   const [draft, setDraft] = useState<Draft>(() => toDraft(event));
   const [justSaved, setJustSaved] = useState(false);
 
+  // Trimmed, so trailing whitespace alone never arms Save. `category` carries
+  // no whitespace either way, so the same comparison serves it.
   const dirty = (Object.keys(draft) as (keyof Draft)[]).some(
     (key) => draft[key].trim() !== saved[key].trim(),
   );
@@ -86,7 +101,7 @@ export function EventDetailsForm({ event }: { event: Event }) {
     }),
   );
 
-  function set<K extends keyof Draft>(key: K, value: string) {
+  function set<K extends keyof Draft>(key: K, value: Draft[K]) {
     setJustSaved(false);
     setDraft((current) => ({ ...current, [key]: value }));
   }
@@ -106,6 +121,7 @@ export function EventDetailsForm({ event }: { event: Event }) {
       id: event.id,
       title: draft.title.trim(),
       venue: draft.venue.trim(),
+      category: draft.category,
       startsAt,
       // Sent as null when cleared, not omitted — an absent key means "leave it
       // alone", which would make clearing the end time appear to work and then
@@ -161,6 +177,22 @@ export function EventDetailsForm({ event }: { event: Event }) {
             required
             disabled={pending}
           />
+        </label>
+
+        <label className="fld fld-wide">
+          <span>Category</span>
+          <select
+            value={draft.category}
+            onChange={(e) => set("category", e.target.value as EventCategory)}
+            disabled={pending}
+          >
+            {EVENT_CATEGORIES.map((option) => (
+              <option key={option} value={option}>
+                {categoryLabel(option)}
+              </option>
+            ))}
+          </select>
+          <span className="fld-hint">Which shelf this sits on in the rack</span>
         </label>
 
         <label className="fld">

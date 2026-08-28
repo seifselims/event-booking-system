@@ -4,6 +4,7 @@ import { and, count, desc, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { auth } from '@/lib/auth';
+import { deleteOwnBlob } from '@/lib/blob';
 import { db } from '@/lib/db';
 import { events, orders, tickets, user } from '@/lib/db/schema';
 
@@ -88,6 +89,7 @@ export const adminRouter = createTRPCRouter({
         id: user.id,
         name: user.name,
         email: user.email,
+        image: user.image,
         role: user.role,
         createdAt: user.createdAt,
         events: sql<number>`COUNT(DISTINCT ${events.id})::int`,
@@ -124,6 +126,10 @@ export const adminRouter = createTRPCRouter({
         email: z.email(),
         // Better Auth's own floor is 8; keep this in step with it.
         password: z.string().min(8).max(128),
+        // The organizer's picture — the public `/organizers` grid renders it the
+        // way the rack renders an event poster. Same storage as posters: either
+        // a file we uploaded to Vercel Blob or a pasted URL (see PosterField).
+        image: z.url().nullable().optional(),
       }),
     )
     .mutation(async ({ input }) => {
@@ -139,10 +145,20 @@ export const adminRouter = createTRPCRouter({
           },
         });
 
+        // `signUpEmail` takes no arbitrary fields, so the image is a second
+        // write — the same two-step shape the seed uses to promote an admin.
+        if (input.image) {
+          await db
+            .update(user)
+            .set({ image: input.image })
+            .where(eq(user.id, result.user.id));
+        }
+
         return {
           id: result.user.id,
           name: result.user.name,
           email: result.user.email,
+          image: input.image ?? null,
           role: 'organizer' as const,
         };
       } catch (error) {
@@ -156,6 +172,72 @@ export const adminRouter = createTRPCRouter({
         }
         throw error;
       }
+    }),
+
+  /**
+   * Edit an organizer's public identity — the name and picture the
+   * `/organizers` grid renders.
+   *
+   * Email and password are deliberately absent: both are credentials, and
+   * changing them out from under someone is an account-recovery flow, not a
+   * roster edit. Role is absent for the same reason it is absent from
+   * `createOrganizer` — promotion stays a deliberate, separate act.
+   */
+  updateOrganizer: adminProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        name: z.string().min(1).max(100).optional(),
+        // Nullable *and* optional, like `events.posterUrl`: omitted leaves the
+        // image alone, `null` clears it. An absent key is a no-op in `.set()`,
+        // so the two cannot share a representation.
+        image: z.url().nullable().optional(),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const { id, ...changes } = input;
+
+      const target = await db.query.user.findFirst({
+        columns: { id: true, role: true, image: true },
+        where: eq(user.id, id),
+      });
+
+      if (!target) throw new TRPCError({ code: 'NOT_FOUND' });
+
+      // Same guard as `deleteOrganizer`: this route manages organizers, and an
+      // admin's own identity is not a roster row to be edited by another admin.
+      if (target.role === 'admin') {
+        throw new TRPCError({
+          code: 'FORBIDDEN',
+          message: 'Admins cannot be edited through this route.',
+        });
+      }
+
+      const [updated] = await db
+        .update(user)
+        .set(changes)
+        .where(eq(user.id, id))
+        .returning({
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          image: user.image,
+          role: user.role,
+        });
+
+      // Replaced or cleared: the old file is now unreferenced. After the write
+      // and only once it succeeded — losing the bytes while the row still
+      // points at them would be worse than leaking them.
+      //
+      // No shared-reference check, unlike `releasePoster` for event posters: an
+      // avatar is one person's picture, and two organizers pointing at the same
+      // URL is not a case worth designing around. `deleteOwnBlob` no-ops on
+      // anything that isn't ours.
+      if (target.image && target.image !== updated.image) {
+        await deleteOwnBlob(target.image);
+      }
+
+      return updated;
     }),
 
   /**
@@ -178,7 +260,7 @@ export const adminRouter = createTRPCRouter({
       }
 
       const target = await db.query.user.findFirst({
-        columns: { id: true, role: true },
+        columns: { id: true, role: true, image: true },
         where: eq(user.id, input.id),
       });
 
@@ -214,6 +296,16 @@ export const adminRouter = createTRPCRouter({
         .delete(user)
         .where(eq(user.id, input.id))
         .returning({ id: user.id, email: user.email });
+
+      // Nothing references their picture now. After the delete, and never
+      // fatal — a leaked file is cheaper than a delete reported as failed.
+      //
+      // Their events' posters are NOT swept here: those rows went by cascade,
+      // so their URLs are already unreachable. Releasing them would mean
+      // collecting the posters before the delete, which `deleteEvent` does for
+      // a single event but this bulk path does not. Left as a known leak rather
+      // than a silent half-measure.
+      await deleteOwnBlob(target.image);
 
       return deleted;
     }),

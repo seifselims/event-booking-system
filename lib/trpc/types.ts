@@ -13,3 +13,14 @@ export type RouterOutputs = inferRouterOutputs<AppRouter>;
  * component that renders an event stops compiling. That is the point.
  */
 export type EventListItem = RouterOutputs['events']['listEvents'][number];
+
+/**
+ * One row of the public organizer index, with its visible-event count.
+ *
+ * Inferred from `listOrganizers` for the same reason as `EventListItem` above:
+ * that procedure selects three deliberately narrow columns (`user` also holds
+ * `email` and `role`), and widening it should force every card that renders an
+ * organizer to be re-checked.
+ */
+export type OrganizerListItem =
+  RouterOutputs['events']['listOrganizers'][number];

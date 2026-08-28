@@ -47,9 +47,13 @@ export default async function DashboardPage() {
           </h1>
         </div>
 
-        <Link className="pill pill-turq" href="/dashboard/events/new">
-          New event
-        </Link>
+        {/* Admins oversee events, they don't author them — creating one would
+            make the admin its organizer. `createEvent` refuses them outright. */}
+        {user.role === "admin" ? null : (
+          <Link className="pill pill-turq" href="/dashboard/events/new">
+            New event
+          </Link>
+        )}
       </div>
 
       <HydrateClient>
