@@ -20,8 +20,12 @@ type Conn = DB | Tx;
  * `pending` with a hold that has not yet expired.
  *
  * Never trust this at purchase time: §6.1 recomputes it under a row lock.
+ *
+ * Exported because the public event page needs the same numbers: `getEventBySlug`
+ * merges them into its tiers so one query carries both, rather than duplicating
+ * this SQL or making the page fire a second request for it.
  */
-async function availabilityByType(conn: Conn, eventId: string) {
+export async function availabilityByType(conn: Conn, eventId: string) {
   const rows = await conn
     .select({
       ticketTypeId: ticketTypes.id,

@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { capacityOf, formatEGP, formatEventDate, minPrice } from "@/lib/format";
 import type { EventListItem } from "@/lib/trpc/types";
-import { rackColour } from "@/lib/palette";
+import { eventArtVariant, rackColour, RACK_PALETTE } from "@/lib/palette";
 
 import { EventArt } from "./event-art";
 
@@ -24,6 +24,14 @@ export function RackCard({
   event: EventListItem;
   index: number;
 }) {
+  // Colour is POSITIONAL, which is what guarantees six distinct grounds on a
+  // full page — a per-event hash cannot promise that, and repeats in a six-up
+  // grid are the first thing you notice.
+  //
+  // Position is not a property of the event, though, so `/e/[slug]` cannot
+  // re-derive it: the link carries it as `?c=`, and the page falls back to the
+  // slug hash when it is absent (lib/palette.ts). Art stays keyed to the slug —
+  // it is the event's picture, not its slot's.
   const colour = rackColour(index);
   const from = minPrice(event.ticketTypes);
   const capacity = capacityOf(event.ticketTypes);
@@ -33,7 +41,7 @@ export function RackCard({
   return (
     <Link
       className="rk"
-      href={`/e/${event.slug}`}
+      href={`/e/${event.slug}?c=${index % RACK_PALETTE.length}`}
       style={
         {
           "--rk": colour.rk,
@@ -48,7 +56,7 @@ export function RackCard({
           // eslint-disable-next-line @next/next/no-img-element
           <img src={event.posterUrl} alt="" />
         ) : (
-          <EventArt variant={index} />
+          <EventArt variant={eventArtVariant(event.slug)} />
         )}
 
         <span className="rk-date">{formatEventDate(event.startsAt)}</span>

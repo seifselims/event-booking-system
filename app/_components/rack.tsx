@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 
 import { EVENT_CATEGORIES, categoryLabel } from "@/lib/categories";
 import type { EventCategory } from "@/lib/categories";
+import { rackColour } from "@/lib/palette";
 import type { EventListItem } from "@/lib/trpc/types";
 
 import { Pager } from "./pager";
@@ -15,14 +16,14 @@ type Filter = EventCategory | "all";
 /**
  * Sleeves per page.
  *
- * SIX IS LOAD-BEARING, not a layout preference. The ground cross-fade in
- * globals.css is six rules — `#s1:has(.rk:nth-child(1..6):hover)` — while
- * `rackColour` wraps at `index % 6`. A seventh card therefore takes card one's
- * colour but matches no rule, so hovering it fades the ground to nothing.
- * Capping a page at six keeps every rendered card inside the rules that exist.
+ * SIX IS LOAD-BEARING, not a layout preference. It matches `RACK_PALETTE`, so a
+ * full page shows each colour exactly once — the whole reason card colour is
+ * positional rather than hashed. The ground cross-fade is six rules to match
+ * (`.rack-grid:has(.rk:nth-child(1..6):hover)`), so a seventh card would take
+ * card one's ground and fade to nothing.
  *
- * Raising this means adding the matching `nth-child` rules and `RACK_PALETTE`
- * entries together, in lockstep (lib/palette.ts).
+ * Raising this means adding `RACK_PALETTE` entries and the matching `nth-child`
+ * rules together, in lockstep (lib/palette.ts, globals.css).
  */
 const PAGE_SIZE = 6;
 
@@ -153,16 +154,32 @@ export function Rack({
         </p>
       ) : (
         // NOTE: the ground cross-fade in globals.css targets
-        // `#s1:has(.rk:nth-child(N):hover)`, so nothing may precede the cards
-        // inside this grid or the six colour rules shift by one. For the same
-        // reason off-page cards are sliced away rather than hidden — CSS counts
-        // hidden siblings, so `display: none` would break the indices.
+        // `.rack-grid:has(.rk:nth-child(N):hover)`, so nothing may precede the
+        // cards inside this grid or the six colour rules shift by one. For the
+        // same reason off-page cards are sliced away rather than hidden — CSS
+        // counts hidden siblings, so `display: none` would break the indices.
         //
-        // The index passed to each card is its position in the RENDERED page,
-        // not in `events` — those rules key off `nth-child`, so a card's colour
-        // has to follow where it actually sits or the hovered ground stops
-        // matching the sleeve under the cursor.
-        <div className="rack-grid">
+        // Card colour, art position and the fade are all driven from this index,
+        // so a full page always shows six DIFFERENT grounds. The event page
+        // cannot re-derive the index, so each card sends it along in `?c=`
+        // (lib/palette.ts).
+        <div
+          className="rack-grid"
+          style={
+            // The cross-fade's six grounds, published where CSS can reach them.
+            // The rules that use these sit on `.rack-grid` and paint a layer
+            // stretched over the whole section; custom properties only cascade
+            // DOWNWARD, so they cannot be read from the section above.
+            //
+            // Positional, matching the cards — slot N's fade is slot N's field.
+            Object.fromEntries(
+              paged.map((_, i) => [
+                `--rkfield-${i + 1}`,
+                rackColour(i).field,
+              ]),
+            ) as React.CSSProperties
+          }
+        >
           {paged.map((event, i) => (
             <RackCard key={event.id} event={event} index={i} />
           ))}

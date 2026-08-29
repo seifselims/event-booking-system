@@ -163,32 +163,82 @@ button {
 /* The world's signature motion: the ground cross-fades between releases.
    Pure CSS — no client JS anywhere on this page.
 
-   CONSTRAINT: these six grounds are bound by nth-child index, and duplicate
-   the `field` values in lib/palette.ts. CSS cannot read a descendant's custom
-   property from an ancestor, so the duplication is unavoidable — keep the
-   order of RACK_PALETTE in lockstep with these rules. The indices also assume
-   NOTHING precedes the .rk cards inside .rack-grid. */
-#s1:has(.rk:nth-child(1):hover) {
-  background-color: #0a6e6b;
+   The field is painted by a full-bleed layer BEHIND the section's content
+   rather than by the section's own `background-color`. That inversion is what
+   lets the colour come from the hovered card: CSS reads custom properties only
+   downward, and the cards sit below the section — but `.rack-grid` is an
+   ancestor of the cards and can carry `--rkfield-1..6`, so the layer is
+   attached there and stretched back over the whole section.
+
+   Each rule reads the slot the `:has()` test just matched, so the ground fades
+   to THAT event's field colour (`eventColour`, lib/palette.ts) instead of to a
+   hex hardcoded per position. Before this, card colour was positional and the
+   two agreed by construction; now a hardcoded slot colour would fade to
+   whatever unrelated event owns that slot — a turquoise card turning the ground
+   red, which is the bug this replaced.
+
+   CONSTRAINT unchanged: one rule per card position, so a page holds at most six
+   cards (PAGE_SIZE in rack.tsx) and NOTHING may precede the cards inside
+   .rack-grid or the indices shift. */
+/* Stretched to the SECTION, not the grid: `.side` is the nearest positioned
+   ancestor (it sets `position: relative`), so `inset: 0` here means the whole
+   field, which is what cross-fades.
+
+   `z-index: 0`, NOT `-1`: a negative index would paint the layer behind
+   `.side`'s own opaque `background`, which is the ground it is trying to
+   replace — the fade would compute correctly and never be seen. At 0 it sits
+   above that background and below the section's content, which all establishes
+   its own stacking above this. */
+.rack-grid::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-color: transparent;
+  transition: background-color 0.55s cubic-bezier(0.4, 0, 0.2, 1);
 }
-#s1:has(.rk:nth-child(2):hover) {
-  background-color: #6e5230;
+
+/* The cards must stay above the layer, or it would wash over them. */
+.rack-grid > .rk {
+  position: relative;
+  z-index: 1;
 }
-#s1:has(.rk:nth-child(3):hover) {
-  background-color: #b8291b;
+
+/* Everything else in the section sits above the layer too — it replaces the
+   ground, so it must never cover the copy standing on it. */
+.rack-head,
+.hero,
+.mq,
+.pager {
+  position: relative;
+  z-index: 1;
 }
-#s1:has(.rk:nth-child(4):hover) {
-  background-color: #7a5400;
+
+.rack-grid:has(.rk:nth-child(1):hover)::before {
+  background-color: var(--rkfield-1);
 }
-#s1:has(.rk:nth-child(5):hover) {
-  background-color: #2a1610;
+.rack-grid:has(.rk:nth-child(2):hover)::before {
+  background-color: var(--rkfield-2);
 }
-#s1:has(.rk:nth-child(6):hover) {
-  background-color: #73310f;
+.rack-grid:has(.rk:nth-child(3):hover)::before {
+  background-color: var(--rkfield-3);
+}
+.rack-grid:has(.rk:nth-child(4):hover)::before {
+  background-color: var(--rkfield-4);
+}
+.rack-grid:has(.rk:nth-child(5):hover)::before {
+  background-color: var(--rkfield-5);
+}
+.rack-grid:has(.rk:nth-child(6):hover)::before {
+  background-color: var(--rkfield-6);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .side {
+  /* `.side` still transitions its own ground elsewhere; `.rack-grid::before` is
+     where the cross-fade itself now lives, so both have to be stilled. */
+  .side,
+  .rack-grid::before {
     transition: none;
   }
 }
@@ -939,6 +989,413 @@ button {
   font-family: var(--font-display);
   font-size: clamp(38px, 4.4vw, 62px);
   line-height: 1.02;
+}
+
+/* ============ SIDE D — THE EVENT PAGE (/e/[slug]) ============
+   The ground is the EVENT'S colour — `eventColour(id)`, the same pair its rack
+   card carries — set inline by the page, so opening a card stays on that card's
+   ground. Nothing here hardcodes a ground or an ink: `--ground`/`--ink` come
+   from RACK_PALETTE (already contrast-checked), and content objects sit on
+   `--panel`/`--panel-ink`, which flips to brown paper on the light grounds so
+   the ticket panel never dissolves into the field (lib/palette.ts).
+   The release opened out: art panel left, billing and ticket listing right. */
+/* The event page is short — one release, not a rack — so the field must be told
+   to own the viewport. Without this the body's tangerine shows below it, which
+   reads as a second section that isn't there. */
+.side-full {
+  min-height: 100vh;
+}
+
+.ev {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  gap: 54px;
+  align-items: start;
+  padding: 72px 0 96px;
+}
+
+.ev-art {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: var(--radius-sleeve);
+  overflow: hidden;
+  /* Only ever seen behind a transparent or still-loading poster, so it tracks
+     the panel rather than sitting brown on a brown ground. */
+  background: var(--panel, var(--color-brown));
+  box-shadow: 0 34px 66px -20px rgba(58, 31, 22, 0.55);
+  /* Matches the sleeve's tilt, levelled — this is the record out of the rack,
+     not one of the flipped-through cards. */
+  transform: rotate(-1.2deg);
+}
+
+.ev-art svg,
+.ev-art img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.ev-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+/* Ink-on-ground inverted, so it reads on all six grounds rather than assuming
+   a brown chip on turquoise (which is brown-on-brown when the ground is dark). */
+.ev-cat {
+  display: inline-block;
+  padding: 6px 15px;
+  border-radius: var(--radius-pill);
+  background: var(--ink);
+  color: var(--ground);
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+/* Tangerine, never tangerine-bright: the bright fails against white and beige.
+   This one keeps a fixed pair — the badge means "sold out" and should read the
+   same on every ground rather than restating the page's colour. */
+.ev-soldout {
+  display: inline-block;
+  padding: 6px 15px;
+  border-radius: var(--radius-pill);
+  background: var(--color-tangerine);
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.ev-title {
+  font-size: clamp(42px, 5vw, 76px);
+  margin-bottom: 26px;
+}
+
+.ev-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 40px;
+  padding-bottom: 24px;
+  margin-bottom: 24px;
+  /* `currentColor` so the rule follows the ground's ink; a fixed brown is
+     invisible on the brown ground. */
+  border-bottom: 2px solid currentColor;
+  border-bottom-color: color-mix(in srgb, currentColor 26%, transparent);
+}
+
+.ev-fact {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.ev-fact > span {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  opacity: 0.62;
+}
+
+.ev-fact > b {
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.ev-org {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 2px;
+}
+
+/* Fades toward the ground rather than jumping to a fixed accent, which would
+   collide with the tangerine and red grounds. */
+.ev-org:hover {
+  color: color-mix(in srgb, currentColor 62%, var(--ground));
+}
+
+.ev-desc {
+  font-size: 16.5px;
+  line-height: 1.6;
+  /* "Soft" is the ground's own ink held back, not --brown-soft, which is tuned
+     for cream and goes invisible on the dark grounds. */
+  color: color-mix(in srgb, currentColor 82%, transparent);
+  margin-bottom: 30px;
+  white-space: pre-wrap;
+}
+
+/* ---- the ticket picker ----
+   A paper object on the event's field. `--panel`/`--panel-ink` are set inline by
+   the page and flip to brown paper on the light grounds, so this panel never
+   dissolves into the ground it sits on (lib/palette.ts).
+
+   Every colour below is mixed from `--panel-ink` rather than written as a fixed
+   brown: the panel is cream on four grounds and brown on the other two, so a
+   literal `rgba(58,31,22,…)` would be invisible on half of them.
+
+   It reuses `.trk` — the sleeve's numbered track listing — which is authored for
+   a dark ground (white text, beige rules), so every colour that component sets
+   is overridden here. The grammar is shared; the palette is not. */
+.pick {
+  background: var(--panel, var(--color-cream));
+  color: var(--panel-ink, var(--color-brown));
+  border-radius: var(--radius-sleeve);
+  padding: 22px 26px 24px;
+  box-shadow: 0 24px 50px -22px rgba(58, 31, 22, 0.5);
+}
+
+.pick-h {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding-bottom: 11px;
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: currentColor;
+  border-bottom: 2px solid color-mix(in srgb, currentColor 28%, transparent);
+}
+
+.pick-empty {
+  padding: 22px 0 6px;
+  font-size: 15px;
+  color: color-mix(in srgb, currentColor 72%, transparent);
+}
+
+/* Four columns, not `.trk`'s three: the stepper is the added one. */
+.pick-row {
+  grid-template-columns: 26px 1fr auto auto;
+  gap: 14px;
+  align-items: center;
+  padding: 13px 0;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 16%, transparent);
+}
+
+/* The row grammar is shared with the sleeve; the ink is not. */
+.pick-row:hover {
+  transform: none;
+}
+
+.pick-row b {
+  color: color-mix(in srgb, currentColor 50%, transparent);
+}
+
+.pick-row i,
+.pick-row i::before {
+  color: currentColor;
+}
+
+.pick-row i::before {
+  opacity: 0.55;
+}
+
+/* `.trk.out` strikes the name through and greys it — right for a dead track,
+   wrong here, where the reason is spelled out beside it. */
+.pick-row.out {
+  color: currentColor;
+  opacity: 0.58;
+}
+
+.pick-row.out .pick-name {
+  text-decoration: none;
+}
+
+.pick-name {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 9px;
+  font-weight: 700;
+}
+
+.pick-note {
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, currentColor 12%, transparent);
+  color: color-mix(in srgb, currentColor 78%, transparent);
+}
+
+/* Scarcity earns the one accent on this object. Fixed pair: it means the same
+   thing on every ground, and tangerine carries white at 6.55:1. */
+.pick-note.hot {
+  background: var(--color-tangerine);
+  color: #fff;
+}
+
+/* ---- quantity stepper ----
+   A pill, like every other control in the system (DESIGN.md § Components). */
+.qty {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--radius-pill);
+  border: 2px solid color-mix(in srgb, currentColor 28%, transparent);
+  /* Lifts off the panel in both directions — white on cream paper, a lighter
+     brown on dark paper. */
+  /* A shade away from the panel in whichever direction the panel is dark or
+     light, so the control reads as inset paper on both. */
+  background: color-mix(in srgb, var(--panel, #fff) 92%, var(--panel-ink, #000));
+}
+
+.qty-btn {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: currentColor;
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1;
+  transition:
+    background 0.16s,
+    color 0.16s;
+}
+
+/* Inverts against the panel, so it works on cream and on brown paper alike. */
+.qty-btn:hover:not([disabled]) {
+  background: var(--panel-ink, var(--color-brown));
+  color: var(--panel, var(--color-cream));
+}
+
+.qty-btn[disabled] {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.qty-n {
+  min-width: 26px;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+/* Holds the stepper's width so blocked rows don't shift the price column. */
+.qty-none {
+  min-width: 96px;
+  text-align: center;
+  font-weight: 800;
+  opacity: 0.5;
+}
+
+.pick-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding-top: 20px;
+}
+
+.pick-total {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pick-total > span {
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, currentColor 72%, transparent);
+}
+
+.pick-total > b {
+  font-family: var(--font-display);
+  font-size: 34px;
+  line-height: 1;
+}
+
+/* `.pill` takes its border and text from `--ink`, which is the *section's* ink,
+   not this panel's — the two differ here. `.pill-turq` sets its own colours, so
+   it is the one that reads on either paper. */
+.pick-go {
+  flex: none;
+}
+
+/* ---- loading skeleton ----
+   Shapes standing in for the page's own, so nothing jumps when content lands.
+   The pulse is opacity-only (compositor-friendly) and stops under
+   `prefers-reduced-motion`, where the shapes simply hold. */
+.sk {
+  background: color-mix(in srgb, currentColor 14%, transparent);
+  border-radius: 12px;
+  animation: sk-pulse 1.4s ease-in-out infinite;
+}
+
+.sk-chip {
+  width: 92px;
+  height: 28px;
+  border-radius: var(--radius-pill);
+  margin-bottom: 14px;
+}
+
+.sk-title {
+  width: min(560px, 100%);
+  height: 74px;
+  margin-bottom: 26px;
+}
+
+.sk-facts {
+  width: min(460px, 100%);
+  height: 46px;
+  margin-bottom: 34px;
+}
+
+.sk-panel {
+  width: 100%;
+  height: 320px;
+  border-radius: var(--radius-sleeve);
+}
+
+/* The art panel already carries its own radius and ratio; it only needs the
+   wash and the pulse. */
+.ev-art.sk {
+  background: color-mix(in srgb, currentColor 14%, transparent);
+}
+
+@keyframes sk-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sk {
+    animation: none;
+  }
+}
+
+.pick-fine {
+  padding-top: 14px;
+  font-size: 12.5px;
+  color: color-mix(in srgb, currentColor 72%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .qty-btn {
+    transition: none;
+  }
 }
 
 /* ============ SIDE B — THE DOOR (organizer sign-in) ============
@@ -2262,6 +2719,18 @@ button {
   .gate-list {
     max-width: none;
   }
+
+  /* The art panel would be a full-width square above the fold on its own row,
+     pushing the tickets off screen — cap it and level it out. */
+  .ev {
+    grid-template-columns: 1fr;
+    gap: 40px;
+    max-width: 620px;
+  }
+
+  .ev-art {
+    transform: none;
+  }
 }
 
 @media (max-width: 680px) {
@@ -2318,5 +2787,39 @@ button {
   .org-head-img {
     width: 72px;
     height: 72px;
+  }
+
+  .ev {
+    padding-top: 56px;
+  }
+
+  .pick {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+
+  /* Four columns don't fit: the stepper drops to its own line under the name,
+     spanning from the number column's right edge. */
+  .pick-row {
+    grid-template-columns: 26px 1fr auto;
+    row-gap: 10px;
+  }
+
+  .pick-row .qty,
+  .pick-row .qty-none {
+    grid-column: 2 / -1;
+    justify-self: start;
+  }
+
+  .qty-none {
+    min-width: 0;
+  }
+
+  .pick-foot {
+    align-items: stretch;
+  }
+
+  .pick-go {
+    width: 100%;
   }
 }

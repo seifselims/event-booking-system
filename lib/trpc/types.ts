@@ -24,3 +24,16 @@ export type EventListItem = RouterOutputs['events']['listEvents'][number];
  */
 export type OrganizerListItem =
   RouterOutputs['events']['listOrganizers'][number];
+
+/**
+ * One public event page, with its organizer and its tiers.
+ *
+ * Inferred from `getEventBySlug` rather than from `EventListItem`: that
+ * procedure merges live `available` counts into each tier (spec §5.3), which
+ * the listing does not carry. Anything rendering the selector should type
+ * against this so dropping that merge breaks the build.
+ */
+export type EventPageItem = RouterOutputs['events']['getEventBySlug'];
+
+/** One purchasable tier on the event page, carrying its derived availability. */
+export type EventPageTier = EventPageItem['ticketTypes'][number];

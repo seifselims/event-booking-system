@@ -27,6 +27,7 @@ import {
   organizerProcedure,
   baseProcedure,
 } from '../init';
+import { availabilityByType } from './tickets';
 
 /**
  * Restrict a query to the caller's own events. Admins see every organizer's
@@ -321,6 +322,61 @@ export const eventsRouter = createTRPCRouter({
       if (!event) throw new TRPCError({ code: 'NOT_FOUND' });
 
       return event;
+    }),
+
+  /**
+   * The public event page (spec §8, `/e/[slug]`) — what a buyer actually lands on.
+   *
+   * Addressed by `slug`, not `id`: the rack's cards have always linked to
+   * `/e/[slug]`, and the column is uniquely indexed. `getEvent` stays as-is for
+   * id-addressed callers.
+   *
+   * Same visibility rule as `listEvents`, so a draft, a cancelled event, or one
+   * whose doors have closed 404s rather than offering tickets nobody can use.
+   *
+   * Tiers carry **live availability** (spec §5.3), merged from the same query
+   * the tickets router uses. It rides along here rather than in a second request
+   * so the selector can render sold-out tiers on first paint — but it is a
+   * *display* number with no lock behind it, and §6.1 must recompute under a row
+   * lock when the purchase mutation lands. Never decide a sale from this.
+   *
+   * `salesStartAt` / `salesEndAt` are returned raw rather than folded into a
+   * boolean: the buyer is told *why* a tier is unavailable ("from 3 Sep"), which
+   * needs the date, and the purchase mutation re-checks the window anyway.
+   */
+  getEventBySlug: baseProcedure
+    .input(z.object({ slug: z.string() }))
+    .query(async ({ input }) => {
+      const event = await db.query.events.findFirst({
+        where: and(
+          eq(events.slug, input.slug),
+          inArray(events.status, PUBLIC_STATUSES),
+          sql`NOT ${IS_PAST}`,
+        ),
+        with: {
+          ticketTypes: { orderBy: asc(ticketTypes.pricePiastres) },
+          organizer: { columns: PUBLIC_ORGANIZER_COLUMNS },
+        },
+      });
+
+      if (!event) throw new TRPCError({ code: 'NOT_FOUND' });
+
+      const availability = await availabilityByType(db, event.id);
+      const availableById = new Map(
+        availability.map((row) => [row.ticketTypeId, row.available]),
+      );
+
+      return {
+        ...event,
+        ticketTypes: event.ticketTypes.map((tier) => ({
+          ...tier,
+          // A tier with no rows in the availability query cannot happen — it is
+          // grouped from `ticket_types` itself — but clamping at 0 keeps a
+          // negative from ever reaching the UI if inventory is lowered below
+          // what already sold.
+          available: Math.max(0, availableById.get(tier.id) ?? tier.quantity),
+        })),
+      };
     }),
 
   /**
