@@ -17,7 +17,7 @@ const NOTE: Record<Status, string> = {
   sold_out:
     "Live, but every tier is exhausted. Add capacity to a tier to put it back on sale.",
   cancelled:
-    "Cancelled and hidden from the public site. Existing orders are unaffected — refunds are handled per order.",
+    "Cancelled and hidden from the public site. Tickets already sold stay valid — cancelling an event does not refund them.",
   archived: "Archived and hidden from the public site.",
 };
 

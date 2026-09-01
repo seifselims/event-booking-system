@@ -41,13 +41,9 @@ export function SiteNav({
         >
           Organizers
         </Link>
-        <Link href="/tickets">My tickets</Link>
       </div>
 
       <div className="nav-right">
-        <Link className="pill pill-sm pill-ghost" href="/tickets">
-          Find tickets
-        </Link>
         <Link className="pill pill-sm pill-solid" href="/sign-in">
           Organizer
         </Link>

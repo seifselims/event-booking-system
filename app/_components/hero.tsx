@@ -37,9 +37,6 @@ export function Hero({
             <Link className="pill pill-solid" href="#rack">
               Flip the rack &rarr;
             </Link>
-            <Link className="pill pill-ghost" href="/tickets">
-              I have a ticket
-            </Link>
           </div>
 
           <div className="rack-strip">

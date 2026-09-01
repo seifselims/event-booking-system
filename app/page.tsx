@@ -4,6 +4,13 @@ import { SiteNav } from "./_components/site-nav";
 import { HydrateClient, prefetch, trpc } from "@/lib/trpc/server";
 
 /**
+ * Never prerender. Building the tRPC context reads `next/headers` (session +
+ * rate-limit IP), which throws during a static render — and the listing is
+ * per-request anyway, since `remaining` is derived live.
+ */
+export const dynamic = "force-dynamic";
+
+/**
  * The public landing page — "Side A", the rack.
  *
  * Server half: prefetch the listing into this request's QueryClient and hand

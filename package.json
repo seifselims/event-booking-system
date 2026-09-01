@@ -10,6 +10,8 @@
     "stripe:listen": "stripe listen --forward-to localhost:3000/api/webhooks/stripe",
     "stripe:check": "tsx --env-file=.env scripts/stripe-check.ts",
     "stripe:sweep": "tsx --env-file=.env scripts/stripe-sweep.ts",
+    "holds:sweep": "tsx --env-file=.env scripts/expire-holds.ts",
+    "reconcile": "tsx --env-file=.env scripts/reconcile.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",

@@ -15,6 +15,13 @@
       "when": 1787154399155,
       "tag": "0001_daily_archangel",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788262470240,
+      "tag": "0002_charming_bloodstrike",
+      "breakpoints": true
     }
   ]
 }
