@@ -27,7 +27,7 @@ import {
   organizerProcedure,
   baseProcedure,
 } from '../init';
-import { availabilityByType } from './tickets';
+import { availabilityByEvent, availabilityByType } from './tickets';
 
 /**
  * Restrict a query to the caller's own events. Admins see every organizer's
@@ -42,8 +42,12 @@ function ownsEvent(eventId: string, organizerId: string, isAdmin: boolean) {
 /**
  * Statuses the public site shows. `sold_out` stays listed — the event is still
  * happening, there is just nothing left to buy.
+ *
+ * Exported because the purchase mutation (§6.1) must judge "on sale" by exactly
+ * the same rule the public page did — a buyer may not hold a seat on an event
+ * they could never have been shown.
  */
-const PUBLIC_STATUSES = ['active', 'sold_out'] as const;
+export const PUBLIC_STATUSES = ['active', 'sold_out'] as const;
 
 /**
  * The only `user` columns a public procedure may return.
@@ -109,7 +113,33 @@ async function releasePoster(url: string, exceptEventId: string) {
  * Evaluated by Postgres so it does not depend on the container's clock, the
  * same reasoning as `CAIRO_DAY_END` above.
  */
-const IS_PAST = sql<boolean>`(COALESCE(${events.endsAt}, ${events.startsAt}) < now())`;
+export const IS_PAST = sql<boolean>`(COALESCE(${events.endsAt}, ${events.startsAt}) < now())`;
+
+/**
+ * Attach live remaining seats to a list of events.
+ *
+ * The cards used to show `capacityOf(ticketTypes)` — the *total* the organizer
+ * configured, which never moves as tickets sell. A card promising 300 seats when
+ * three remain is not a stale number, it is a wrong one, and it is the number a
+ * buyer decides on.
+ *
+ * One extra query for the whole page, not one per card (`availabilityByEvent`).
+ * Display only: `createOrder` recomputes under a lock and is the only number
+ * that decides whether a seat can be sold.
+ */
+async function withRemaining<T extends { id: string }>(rows: T[]) {
+  const remaining = await availabilityByEvent(
+    db,
+    rows.map((row) => row.id),
+  );
+
+  return rows.map((row) => ({
+    ...row,
+    // An event with no tiers is unconfigured, not sold out — `availabilityByEvent`
+    // returns no entry for it, and 0 is the honest answer for "seats you can buy".
+    remaining: remaining.get(row.id) ?? 0,
+  }));
+}
 
 /** Lowercase, hyphenated, punctuation stripped — `slug` is globally unique. */
 function slugify(title: string) {
@@ -188,8 +218,8 @@ const createEventWithTiersInput = createEventInput.safeExtend({
 
 export const eventsRouter = createTRPCRouter({
   /** Public listing — publicly visible events only, newest first. */
-  listEvents: baseProcedure.query(() =>
-    db.query.events.findMany({
+  listEvents: baseProcedure.query(async () => {
+    const rows = await db.query.events.findMany({
       orderBy: desc(events.createdAt),
       // Past events drop off the public site without anyone archiving them —
       // this is the derived half of auto-archive (see `IS_PAST`).
@@ -200,8 +230,10 @@ export const eventsRouter = createTRPCRouter({
         // `role`, and this is a public procedure.
         organizer: { columns: PUBLIC_ORGANIZER_COLUMNS },
       },
-    }),
-  ),
+    });
+
+    return withRemaining(rows);
+  }),
 
   /**
    * The nav's "Tonight" — publicly visible events starting between now and
@@ -210,8 +242,8 @@ export const eventsRouter = createTRPCRouter({
    * Doors that have already opened are dropped: `startsAt >= now()` keeps the
    * list to things you can still turn up for.
    */
-  listTonight: baseProcedure.query(() =>
-    db.query.events.findMany({
+  listTonight: baseProcedure.query(async () => {
+    const rows = await db.query.events.findMany({
       orderBy: asc(events.startsAt),
       where: and(
         inArray(events.status, PUBLIC_STATUSES),
@@ -222,8 +254,10 @@ export const eventsRouter = createTRPCRouter({
         ticketTypes: true,
         organizer: { columns: PUBLIC_ORGANIZER_COLUMNS },
       },
-    }),
-  ),
+    });
+
+    return withRemaining(rows);
+  }),
 
   /**
    * The public organizer index — everyone with something on sale.
@@ -299,7 +333,7 @@ export const eventsRouter = createTRPCRouter({
         throw new TRPCError({ code: 'NOT_FOUND' });
       }
 
-      return { ...organizer, events: organizerEvents };
+      return { ...organizer, events: await withRemaining(organizerEvents) };
     }),
 
   getEvent: baseProcedure

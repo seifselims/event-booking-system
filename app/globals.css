@@ -1392,6 +1392,116 @@ button {
   color: color-mix(in srgb, currentColor 72%, transparent);
 }
 
+/* Name field and purchase error, in the selector's footer. Same
+   `currentColor` discipline as the gate above. */
+.pick-name-fld {
+  padding: 4px 0 12px;
+}
+
+.pick-name-fld label {
+  display: block;
+  padding-bottom: 7px;
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, currentColor 78%, transparent);
+}
+
+/* The server's refusal — a tier sold out, an allowance spent. Sits inline
+   above the button rather than as a toast: it explains why the click did not
+   work, so it has to still be there while the buyer re-picks. */
+.pick-error {
+  margin: 0 0 12px;
+  padding: 10px 13px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--color-tangerine);
+  background: color-mix(in srgb, var(--color-tangerine) 10%, transparent);
+  border: 2px solid color-mix(in srgb, var(--color-tangerine) 30%, transparent);
+  border-radius: 10px;
+}
+
+/* The email gate, above the tiers. It sits on `.pick`'s paper, so everything
+   here takes its colour from `currentColor` rather than naming a token — the
+   panel's ink changes with the ground the event page happens to be on. */
+.pick-gate {
+  padding: 16px 0 4px;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  margin-bottom: 4px;
+}
+
+.pick-gate-label {
+  display: block;
+  padding-bottom: 7px;
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, currentColor 78%, transparent);
+}
+
+.pick-gate-row {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+  flex-wrap: wrap;
+}
+
+.pick-gate-input {
+  flex: 1 1 200px;
+  min-width: 0;
+  padding: 10px 13px;
+  font: inherit;
+  font-size: 15px;
+  color: currentColor;
+  background: color-mix(in srgb, currentColor 5%, transparent);
+  border: 2px solid color-mix(in srgb, currentColor 26%, transparent);
+  border-radius: 10px;
+}
+
+.pick-gate-input:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 1px;
+}
+
+.pick-gate-why {
+  padding-top: 9px;
+  font-size: 12.5px;
+  color: color-mix(in srgb, currentColor 70%, transparent);
+}
+
+.pick-gate-set {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 14px;
+}
+
+.pick-gate-set b {
+  font-weight: 700;
+}
+
+/* A link, not a button: it undoes a choice rather than driving the purchase. */
+.pick-gate-change {
+  font: inherit;
+  font-size: 12.5px;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  opacity: 0.72;
+}
+
+.pick-gate-change:hover {
+  opacity: 1;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .qty-btn {
     transition: none;
@@ -2822,4 +2932,342 @@ button {
   .pick-go {
     width: 100%;
   }
+}
+
+/* ── Checkout (`/checkout/[orderId]`) ──────────────────────────────────────
+   DESIGN.md pins this screen to the brown ground: it is neither the public
+   field nor the console, but a held breath — a clock running against seats
+   that are not yet the buyer's. One centred panel, nothing else competing. */
+
+.cx {
+  display: flex;
+  justify-content: center;
+  padding: 60px 0 90px;
+}
+
+.cx-panel {
+  width: min(520px, 100%);
+  padding: 30px 32px 32px;
+  background: var(--color-cream);
+  color: var(--color-brown);
+  border-radius: var(--radius-sleeve);
+  box-shadow: 0 30px 60px -26px rgba(0, 0, 0, 0.55);
+}
+
+.cx-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding-bottom: 11px;
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  border-bottom: 2px solid color-mix(in srgb, currentColor 28%, transparent);
+}
+
+.cx-title {
+  padding: 20px 0 0;
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-size: clamp(26px, 4vw, 34px);
+  font-weight: 800;
+  line-height: 1.12;
+}
+
+/* The clock. Tabular figures so the seconds do not shuffle the layout as they
+   tick — the one place in the app where a number changes every second. */
+.cx-clock {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 18px 0 4px;
+}
+
+.cx-clock b {
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-size: 46px;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.cx-clock span {
+  font-size: 13.5px;
+  color: var(--color-brown-soft);
+}
+
+.cx-note {
+  padding-top: 14px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--color-brown-soft);
+}
+
+/* A declined card, or a refusal. Tangerine on cream clears AA; the bright
+   orange never carries copy (DESIGN.md § Colour). */
+.cx-note-warn {
+  color: var(--color-tangerine);
+  font-weight: 600;
+}
+
+.cx-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-top: 24px;
+}
+
+/* **The cream-panel-on-a-drenched-ground trap**, the same one AGENTS.md
+   documents for the console.
+
+   `.cx-panel` is cream, but it sits inside a `.side` whose `--ink` is beige —
+   and `.pill` takes both its `color` and its `border-color` from `--ink`. A
+   plain `.pill` here therefore paints beige on cream: technically rendered,
+   practically invisible, and impossible to aim a click at.
+
+   Every control inside this panel must state its own colours. */
+.cx-actions .pill-ghost {
+  color: var(--color-brown);
+  border-color: color-mix(in srgb, var(--color-brown) 40%, transparent);
+}
+
+.cx-actions .pill-ghost:hover {
+  background: color-mix(in srgb, var(--color-brown) 8%, transparent);
+}
+
+/* `.pill-turq` sets its own background and text, but inherits `--ink` for the
+   border — beige against cream, which erases the button's edge and makes the
+   primary action read as bare text. */
+.cx-actions .pill-turq {
+  border-color: var(--color-turquoise);
+  color: var(--color-brown);
+}
+
+/* The global `.pill-turq:hover` goes to white — which on a cream panel removes
+   the fill entirely and makes the button vanish under the cursor, exactly when
+   someone is trying to click it. Darken instead. */
+.cx-actions .pill-turq:hover:not([disabled]) {
+  background: color-mix(in srgb, var(--color-turquoise) 82%, var(--color-brown));
+  border-color: color-mix(in srgb, var(--color-turquoise) 82%, var(--color-brown));
+  color: var(--color-brown);
+}
+
+/* ── Tickets (`/orders/[id]/[token]`) ─────────────────────────────────────
+   Turquoise ground per DESIGN.md, carrying `.stub` objects. The stubs reuse
+   the sign-in door's grammar wholesale — including `.stub-tear`, whose notches
+   are punched in `var(--ground)` and so show this section's turquoise through
+   the paper with no per-page colour work. */
+
+.tk {
+  padding: 48px 0 90px;
+}
+
+.tk-head {
+  max-width: 640px;
+  padding-bottom: 34px;
+}
+
+.tk-title {
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-size: clamp(30px, 5vw, 46px);
+  font-weight: 800;
+  line-height: 1.08;
+}
+
+.tk-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 26px;
+  padding-top: 18px;
+}
+
+.tk-facts span {
+  display: block;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+.tk-facts b {
+  display: block;
+  padding-top: 4px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.tk-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 26px;
+}
+
+/* The stub sits straight here, unlike the sign-in door's jaunty 1.4deg: this
+   is a document someone holds up to a scanner, not decoration. */
+.tk-stub {
+  width: 100%;
+  transform: none;
+}
+
+.tk-stub:hover,
+.tk-stub:focus-within {
+  transform: translateY(-4px);
+}
+
+.tk-qr {
+  display: flex;
+  justify-content: center;
+  padding: 20px 0 14px;
+}
+
+.tk-qr img {
+  width: 200px;
+  height: 200px;
+  border-radius: 10px;
+}
+
+.tk-holder {
+  padding-bottom: 16px;
+  font-size: 14px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.tk-used {
+  padding-bottom: 14px;
+  font-size: 12.5px;
+  font-weight: 700;
+  text-align: center;
+  color: var(--color-tangerine);
+}
+
+.tk-note {
+  padding-top: 14px;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.tk-fine {
+  padding-top: 30px;
+  font-size: 13px;
+  opacity: 0.75;
+}
+
+@media (max-width: 680px) {
+  .cx-panel {
+    padding: 24px 22px 26px;
+  }
+
+  .cx-actions .pill,
+  .cx-actions .pill-turq {
+    width: 100%;
+    text-align: center;
+  }
+}
+
+/* ── Ticket modal (`/e/[slug]?paid=…`) ────────────────────────────────────
+   Wider than the admin dialog because it carries QR codes rather than a form,
+   and scrollable because four tickets exceed any phone's height. It inherits
+   `.modal`'s cream ground, brown ink, `--ink` restatement and ::backdrop. */
+
+.tkm {
+  width: min(560px, calc(100vw - 32px));
+  overflow-y: auto;
+}
+
+/* The instruction that matters before the buyer dismisses this. Given a real
+   ground rather than small print — someone who closes without reading it and
+   without checking their email has to go hunting. */
+.tkm-save {
+  margin: 0 26px 4px;
+  padding: 12px 14px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  background: color-mix(in srgb, var(--color-turquoise) 22%, transparent);
+  border-radius: 12px;
+}
+
+.tkm-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 16px;
+}
+
+.tkm-stub {
+  padding: 14px;
+  text-align: center;
+  background: #fff;
+  border: 2px dashed color-mix(in srgb, var(--color-brown) 26%, transparent);
+  border-radius: 14px;
+}
+
+.tkm-tier {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding-bottom: 10px;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.tkm-tier b {
+  color: var(--color-tangerine);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The QR must stay crisp: a scaled-down PNG blurs the modules and scanners
+   start failing at odd angles. */
+.tkm-stub img {
+  display: block;
+  width: 100%;
+  max-width: 180px;
+  height: auto;
+  margin: 0 auto;
+  border-radius: 8px;
+  image-rendering: crisp-edges;
+}
+
+.tkm-holder {
+  padding-top: 10px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.tkm-total {
+  padding: 14px 26px 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-brown-soft);
+}
+
+.tkm-foot {
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* `.pill-ghost` reads its colours from `--ink`, which `.modal` sets to brown —
+   but the anchor styled as `.pill-turq` beside it needs its text colour stated,
+   since an <a> carries the UA's link colour otherwise. */
+.tkm-foot a.pill-turq {
+  text-decoration: none;
+}
+
+/* Shown when fulfilment has not landed within ten seconds. Tangerine on cream
+   clears AA; the bright orange never carries copy (DESIGN.md § Colour). */
+.tkm-stall {
+  margin: 0 26px;
+  padding: 14px 16px;
+  background: color-mix(in srgb, var(--color-tangerine) 10%, transparent);
+  border: 2px solid color-mix(in srgb, var(--color-tangerine) 28%, transparent);
+  border-radius: 12px;
+}
+
+.tkm-stall p {
+  padding-bottom: 12px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--color-tangerine);
 }

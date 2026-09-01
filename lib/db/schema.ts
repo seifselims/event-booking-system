@@ -184,6 +184,17 @@ export const orders = pgTable(
     }).notNull(),
     stripeSessionId: text("stripe_session_id"),
     stripePaymentIntentId: text("stripe_payment_intent_id"),
+    // Stripe refuses a Checkout Session expiring sooner than 30 minutes out,
+    // but `hold_expires_at` is 10 (spec §6.2). They are two different clocks and
+    // this records Stripe's, so the countdown page and `releaseHold` can tell
+    // the two apart without a round trip. The DB hold stays authoritative:
+    // inventory frees at `hold_expires_at`, and we actively expire the session
+    // at that moment rather than letting Stripe's window run on.
+    checkoutExpiresAt: timestamp("checkout_expires_at", { withTimezone: true }),
+    // The last decline message from Stripe, for the countdown page to show.
+    // Advisory only — a failed attempt inside an open session is retryable, so
+    // this never changes `status` (spec §6.3's race is about expiry, not decline).
+    lastPaymentError: text("last_payment_error"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),

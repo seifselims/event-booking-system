@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { TRPCError } from '@trpc/server';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { db } from '@/lib/db';
@@ -12,7 +12,7 @@ import { createTRPCRouter, baseProcedure, protectedProcedure } from '../init';
 /** Any Drizzle connection — the db itself, or a transaction handle. */
 type DB = typeof db;
 type Tx = Parameters<Parameters<DB['transaction']>[0]>[0];
-type Conn = DB | Tx;
+export type Conn = DB | Tx;
 
 /**
  * Remaining tickets per type for one event, derived (spec §5.3) — there is no
@@ -30,17 +30,26 @@ export async function availabilityByType(conn: Conn, eventId: string) {
     .select({
       ticketTypeId: ticketTypes.id,
       quantity: ticketTypes.quantity,
-      taken: sql<number>`COALESCE(SUM(${orderItems.quantity}), 0)::int`,
+      // **The condition belongs in the SUM, not only in the JOIN.**
+      //
+      // A `LEFT JOIN orders ON ... AND <status test>` does not drop the row when
+      // the test fails — it keeps the `order_items` row and nulls the `orders`
+      // columns. `SUM(order_items.quantity)` then happily adds the quantity of an
+      // expired or lapsed order, so released inventory stayed consumed forever.
+      //
+      // Filtering inside the aggregate is what actually excludes it: a row whose
+      // order failed the test contributes NULL, and SUM ignores NULLs.
+      taken: sql<number>`COALESCE(SUM(
+        CASE
+          WHEN ${orders.status} = 'paid'
+            OR (${orders.status} = 'pending' AND ${orders.holdExpiresAt} > now())
+          THEN ${orderItems.quantity}
+        END
+      ), 0)::int`,
     })
     .from(ticketTypes)
     .leftJoin(orderItems, eq(orderItems.ticketTypeId, ticketTypes.id))
-    .leftJoin(
-      orders,
-      and(
-        eq(orders.id, orderItems.orderId),
-        sql`(${orders.status} = 'paid' OR (${orders.status} = 'pending' AND ${orders.holdExpiresAt} > now()))`,
-      ),
-    )
+    .leftJoin(orders, eq(orders.id, orderItems.orderId))
     .where(eq(ticketTypes.eventId, eventId))
     .groupBy(ticketTypes.id, ticketTypes.quantity);
 
@@ -48,8 +57,47 @@ export async function availabilityByType(conn: Conn, eventId: string) {
     ticketTypeId: row.ticketTypeId,
     quantity: row.quantity,
     taken: row.taken,
-    available: row.quantity - row.taken,
+    // Clamped: inventory lowered below what already sold would otherwise show a
+    // negative, and nothing downstream should ever see one.
+    available: Math.max(0, row.quantity - row.taken),
   }));
+}
+
+/**
+ * Live remaining seats for many events at once, keyed by event id.
+ *
+ * The listing pages show a seat count per card. Calling `availabilityByType`
+ * once per event would be N queries for one page — this is the same derivation
+ * (spec §5.3) grouped by event instead, so a rack of six costs one round trip.
+ *
+ * Display only, like every availability read outside the purchase transaction:
+ * it is stale the moment it returns, and `createOrder` recomputes under a row
+ * lock. Its job is to stop the UI *lying* — a card claiming 300 seats when three
+ * remain is worse than no number at all.
+ */
+export async function availabilityByEvent(conn: Conn, eventIds: string[]) {
+  if (eventIds.length === 0) return new Map<string, number>();
+
+  const rows = await conn
+    .select({
+      eventId: ticketTypes.eventId,
+      // Same CASE-inside-SUM discipline as `availabilityByType` — see the note
+      // there for why the condition cannot live in the JOIN alone.
+      remaining: sql<number>`GREATEST(0, SUM(${ticketTypes.quantity}) - COALESCE(SUM(
+        CASE
+          WHEN ${orders.status} = 'paid'
+            OR (${orders.status} = 'pending' AND ${orders.holdExpiresAt} > now())
+          THEN ${orderItems.quantity}
+        END
+      ), 0))::int`,
+    })
+    .from(ticketTypes)
+    .leftJoin(orderItems, eq(orderItems.ticketTypeId, ticketTypes.id))
+    .leftJoin(orders, eq(orders.id, orderItems.orderId))
+    .where(inArray(ticketTypes.eventId, eventIds))
+    .groupBy(ticketTypes.eventId);
+
+  return new Map(rows.map((row) => [row.eventId, row.remaining]));
 }
 
 /**

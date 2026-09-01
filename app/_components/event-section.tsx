@@ -93,7 +93,11 @@ export function EventSection({ slug }: { slug: string }) {
           <p className="ev-desc">{event.description}</p>
         )}
 
-        <TicketSelector tiers={event.ticketTypes} />
+        <TicketSelector
+          eventId={event.id}
+          slug={event.slug}
+          tiers={event.ticketTypes}
+        />
       </div>
     </div>
   );

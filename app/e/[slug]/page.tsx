@@ -1,8 +1,10 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { EventSection } from "../../_components/event-section";
 import { EventSurface } from "../../_components/event-surface";
+import { TicketModal } from "../../_components/ticket-modal";
 
 import { paletteIndexFrom } from "@/lib/palette";
 import { caller, HydrateClient, prefetch, trpc } from "@/lib/trpc/server";
@@ -87,6 +89,14 @@ export default async function EventPage({
     <EventSurface slug={slug} paletteIndex={paletteIndex}>
       <HydrateClient>
         <EventSection slug={slug} />
+
+        {/* Opens over this page when Stripe returns with `?paid=<orderId>`.
+            Suspense because it reads `useSearchParams`, which opts its subtree
+            into client-side rendering — without a boundary that would deopt the
+            whole page. It renders nothing at all without the parameter. */}
+        <Suspense fallback={null}>
+          <TicketModal />
+        </Suspense>
       </HydrateClient>
     </EventSurface>
   );

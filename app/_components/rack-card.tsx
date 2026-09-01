@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { capacityOf, formatEGP, formatEventDate, minPrice } from "@/lib/format";
+import { formatEGP, formatEventDate, minPrice } from "@/lib/format";
 import type { EventListItem } from "@/lib/trpc/types";
 import { eventArtVariant, rackColour, RACK_PALETTE } from "@/lib/palette";
 
@@ -12,10 +12,17 @@ const SCARCE_THRESHOLD = 100;
 /**
  * One sleeve in the rack.
  *
- * Note the badge shows CAPACITY, not live remaining — availability is derived
- * from orders under a row lock (spec §5.3) and that layer isn't built. When it
- * lands, this component should take a `remaining` prop instead of calling
- * `capacityOf`.
+ * The badge shows **live remaining seats** (spec §5.3), computed by the listing
+ * procedure via `availabilityByEvent` — paid orders and unexpired holds both
+ * count as taken, and both release the moment they stop qualifying.
+ *
+ * It used to show `capacityOf(ticketTypes)`, the organizer's configured total,
+ * which never moved as tickets sold. That is not a stale number but a wrong one,
+ * and it is the number a buyer decides on.
+ *
+ * Still a *display* value: no seat is reserved until an order exists, and
+ * `createOrder` recomputes under a row lock. Two people can read "3 left" at the
+ * same instant and only one of them can act on it.
  */
 export function RackCard({
   event,
@@ -34,9 +41,12 @@ export function RackCard({
   // it is the event's picture, not its slot's.
   const colour = rackColour(index);
   const from = minPrice(event.ticketTypes);
-  const capacity = capacityOf(event.ticketTypes);
-  const soldOut = event.status === "sold_out";
-  const scarce = !soldOut && capacity > 0 && capacity < SCARCE_THRESHOLD;
+  // `sold_out` is the organizer-visible status; `remaining === 0` is what
+  // availability actually says. Either one means nothing is buyable, and the
+  // second catches the window before `syncSoldOut` has flipped the status.
+  const remaining = event.remaining;
+  const soldOut = event.status === "sold_out" || remaining <= 0;
+  const scarce = !soldOut && remaining < SCARCE_THRESHOLD;
 
   return (
     <Link
@@ -62,7 +72,9 @@ export function RackCard({
         <span className="rk-date">{formatEventDate(event.startsAt)}</span>
 
         <span className={`rk-left${scarce ? " hot" : ""}`}>
-          {soldOut ? "Sold out" : `${capacity.toLocaleString("en-EG")} seats`}
+          {soldOut
+            ? "Sold out"
+            : `${remaining.toLocaleString("en-EG")} left`}
         </span>
       </div>
 

@@ -2,6 +2,7 @@ import { initTRPC, TRPCError } from '@trpc/server';
 import superjson from 'superjson';
 
 import { auth } from '@/lib/auth';
+import { rateLimit } from '@/lib/rate-limit';
 
 /**
  * This context creator accepts `headers` so it can be reused in both
@@ -14,6 +15,19 @@ export const createTRPCContext = async (opts: { headers: Headers }) => {
   return {
     session,
     user: session?.user ?? null,
+    /**
+     * The caller's address, for the courtesy rate limiter only.
+     *
+     * Read here rather than inside procedures so the HTTP path and the RSC
+     * `caller()` path cannot diverge. **Never stored on a row** — it keys an
+     * in-memory counter and nothing else.
+     *
+     * The first entry of `x-forwarded-for` is the client's own and is
+     * spoofable; behind a proxy the rightmost hop is not. This is a key, not an
+     * identity, and the durable limit (`livePendingHolds`) is what actually
+     * holds.
+     */
+    ip: opts.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown',
   };
 };
 
@@ -34,6 +48,36 @@ const t = initTRPC.context<TRPCContext>().create({
 export const createTRPCRouter = t.router;
 export const createCallerFactory = t.createCallerFactory;
 export const baseProcedure = t.procedure;
+
+/**
+ * A public procedure with a per-IP request ceiling.
+ *
+ * For unauthenticated write paths, where the cost of an abusive caller lands on
+ * other buyers rather than on themselves. Read `lib/rate-limit.ts` before
+ * relying on the numbers: the counter is per-process, so N serverless instances
+ * means N × the limit, and a cold start is a fresh budget. It stops naive loops
+ * and double-submits, not a distributed attacker.
+ *
+ * Anything whose *correctness* depends on a limit needs a database check
+ * instead — see `livePendingHolds` in `routers/orders.ts`.
+ */
+export const rateLimitedProcedure = (
+  name: string,
+  limit: number,
+  windowMs: number,
+) =>
+  t.procedure.use(async ({ ctx, next }) => {
+    const { ok, retryAfterMs } = rateLimit(`${name}:${ctx.ip}`, limit, windowMs);
+
+    if (!ok) {
+      throw new TRPCError({
+        code: 'TOO_MANY_REQUESTS',
+        message: `Too many attempts. Try again in ${Math.ceil(retryAfterMs / 1000)} seconds.`,
+      });
+    }
+
+    return next();
+  });
 
 /** Requires an authenticated session; narrows `user` to non-null. */
 export const protectedProcedure = t.procedure.use(async ({ ctx, next }) => {
