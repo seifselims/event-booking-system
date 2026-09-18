@@ -1,7 +1,8 @@
 # Gate
 
 An event ticketing platform. Organizers publish events; buyers purchase tickets
-as guests with no account; a QR code arrives by email and is scanned at the door.
+as guests with no account and receive QR tickets by email and in the browser.
+Door scanning is outside the current scope.
 
 The interesting part is not the CRUD. It is that **selling a limited thing to
 concurrent strangers is a correctness problem**, and most of this repository is
@@ -36,22 +37,49 @@ exists anywhere in the schema.
 
 ## Running it
 
-Requires Node 20+, a Neon database, and a Stripe test account.
+Requires Node 20.9+, a Neon database, and a Stripe test account. Email delivery
+needs an SMTP server; poster and organizer-picture uploads use Vercel Blob.
 
 ```bash
 npm install
-cp .env.example .env          # then fill it in — every variable is documented there
-npm run db:push               # see "Migrations" below before deploying
+cp .env.example .env          # replace placeholders using the table below
+npm run db:push               # local setup; read "Migrations" below before deploying
 npm run db:seed               # demo organizers, events, tiers, orders
 npm run dev
 ```
 
-Buying a ticket locally needs the Stripe webhook tunnel running **in a second
-terminal**:
+The seed prints the demo accounts and password. Use `/sign-in` for organizers
+and `/admin/sign-in` for admins. Re-seeding replaces events and their associated
+orders and tickets for the seeded organizers; use a development database.
+
+### Environment variables
+
+`.env.example` contains placeholders. Replace them in `.env`:
+
+| Variable | Value / purpose |
+|---|---|
+| `DATABASE_URL` | Neon Postgres connection string |
+| `BETTER_AUTH_SECRET` | Random signing secret; also signs buyer ticket links. Rotating it invalidates existing ticket links. |
+| `BETTER_AUTH_URL` | App origin, `http://localhost:3000` locally |
+| `NEXT_PUBLIC_APP_URL` | App origin used for checkout redirects and ticket links; `http://localhost:3000` locally |
+| `STRIPE_SECRET_KEY` | Test API key (`sk_test_…` or `rk_test_…`). Restricted keys need Checkout Sessions and Charges/Refunds write access, plus PaymentIntents and Events read access. |
+| `STRIPE_WEBHOOK_SECRET` | Signing secret printed by the local listener, or the deployed endpoint's secret from Stripe |
+| `SMTP_HOST` / `SMTP_PORT` | SMTP server and port; port 465 uses implicit TLS |
+| `SMTP_USER` / `SMTP_PASS` | SMTP credentials; leave both empty for an unauthenticated local relay |
+| `MAIL_FROM` | Sender accepted by your SMTP provider, such as `Gate <tickets@example.com>` |
+| `BLOB_READ_WRITE_TOKEN` | Vercel Blob token for poster and organizer-picture uploads |
+
+### Local payments
+
+Install the Stripe CLI and authenticate with `stripe login`. Buying a ticket
+locally needs its webhook tunnel running **in a second terminal**:
 
 ```bash
 npm run stripe:listen         # prints a whsec_… → put it in STRIPE_WEBHOOK_SECRET
 ```
+
+Restart the app after setting the secret. A deployed endpoint has its own signing
+secret; the local listener's secret cannot be reused for it.
 
 Test card `4242 4242 4242 4242`, any future expiry, any CVC.
 
@@ -66,8 +94,26 @@ npm run stripe:check          # validates env, pings Stripe, lists paid-but-pend
 npm run stripe:sweep          # fulfils anything found stuck
 ```
 
-None of this exists in production, where Stripe posts to a real URL and retries
-for three days.
+Production uses a configured HTTPS webhook endpoint instead of the local tunnel.
+Delivery failures can still occur; keep the endpoint's signing secret configured
+and use `stripe:check` to investigate stuck orders.
+
+### Migrations
+
+Tracked migrations now include the domain tables in
+[`drizzle/0002_charming_bloodstrike.sql`](drizzle/0002_charming_bloodstrike.sql),
+alongside the earlier auth migrations. `lib/db/schema.ts` defines the current
+schema.
+
+Existing databases originally created with `db:push` may have tables that their
+`drizzle.__drizzle_migrations` journal does not record. Before deploying, compare
+the target database's schema and journal with the committed migrations and
+reconcile any mismatch. Running `db:migrate` blindly against a pushed database
+can attempt to create objects that already exist.
+
+For a fresh deployment database, use `npm run db:migrate`; validate the migration
+chain on an empty scratch database first. The presence of migration files alone
+does not verify either that chain or an existing database's applied history.
 
 ---
 
@@ -127,9 +173,10 @@ a number on a screen: no read from it may decide whether a seat can be sold.
 The purchase transaction takes `SELECT … FOR UPDATE` on the tier rows **sorted
 by id**, recomputes availability inside the lock, and only then writes the hold.
 
-Sorting is what makes deadlock structurally impossible: order A wanting tiers
-[X, Y] and order B wanting [Y, X] will otherwise hold one and wait on the other
-forever. Every transaction acquiring locks in the same sequence cannot deadlock.
+Sorting prevents transactions from acquiring the same tier rows in opposite
+orders: order A locking [X, Y] and order B locking [Y, X] could otherwise each
+wait for the other's lock. This addresses that tier-lock cycle; it does not prove
+that every transaction in the application is free of deadlocks.
 
 ### 2. Holds expire
 
@@ -193,7 +240,9 @@ hold:
 - auto-refunded (§6.3) orders issued nothing
 - every ticket secret is unique
 
-This is the difference between "it worked when I clicked it" and "it is correct".
+These checks detect violations in the current database state. A passing run
+does not prove correctness under every possible race; run them after concurrency
+tests to check the resulting data.
 
 ### Load tests
 
@@ -211,12 +260,13 @@ for 50 seats looks perfect to k6. Always run both.
 | Command | What it does |
 |---|---|
 | `npm run dev` / `build` / `start` | Next.js |
+| `npm run lint` | ESLint |
 | `npm run reconcile` | the seven invariants above |
-| `npm run holds:sweep` | mark lapsed holds `expired`, return seats |
+| `npm run holds:sweep` | mark lapsed holds `expired`; availability already excludes them |
 | `npm run stripe:listen` | local webhook tunnel |
 | `npm run stripe:check` | preflight — env, connectivity, stuck orders (read-only) |
 | `npm run stripe:sweep` | fulfil orders paid at Stripe but not here |
-| `npm run db:push` / `generate` / `migrate` / `studio` | Drizzle |
+| `npm run db:push` / `db:generate` / `db:migrate` / `db:studio` | Drizzle schema sync, migration generation/application, and database browser |
 | `npm run db:seed` | demo data |
 | `ALLOW_DB_RESET=1 npm run db:reset` | wipe to a single admin — destructive |
 
@@ -233,10 +283,13 @@ Cut to keep the project focused on the concurrency and payment problems:
 
 ## Known gaps
 
-- **Migrations are out of sync with the schema.** The domain tables were applied
-  with `db:push`, so `drizzle/` covers only the auth tables and `db:migrate`
-  against a fresh database will not reproduce the schema. Treat `lib/db/schema.ts`
-  as the source of truth; this must be reconciled before a real deploy.
+- **Migration history needs verification before deployment.** Domain migrations
+  are committed, but existing databases created through `db:push` need their
+  applied history checked; see [Migrations](#migrations).
+- **No job runner or scheduled hold sweeper.** Email is attempted inline and
+  recorded in `jobs`, but no worker retries failed attempts. `holds:sweep` is a
+  manual command with no scheduler. Lapsed holds stop consuming inventory on
+  time because availability is derived, even before the script runs.
 - **The concurrency guarantees are argued, not yet measured.** The locking is
   written and reasoned through, the k6 suite and reconcile command exist — but
   the flash sale has not been run at scale, so no oversell number here is backed
